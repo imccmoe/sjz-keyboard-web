@@ -91,7 +91,8 @@ async function main() {
     hasLoad: Boolean(document.getElementById('load')),
     rows: document.querySelectorAll('#rows tr').length,
     statusText: document.getElementById('status')?.textContent || '',
-    toggle: Boolean(document.querySelector('.theme-toggle')),
+    segments: document.querySelectorAll('.theme-switch [data-theme-choice]').length,
+    activeSegments: document.querySelectorAll('.theme-switch [data-theme-choice][aria-pressed="true"]').length,
     colored: getComputedStyle(document.querySelector('.button.primary')).backgroundColor
   }))()`);
 
@@ -109,7 +110,9 @@ async function main() {
     /rgb\(/.test(state?.colored || "") && state?.colored !== "rgba(0, 0, 0, 0)", state?.colored);
   check("令牌输入框与读取按钮存在", state?.hasToken && state?.hasLoad);
   check("曲库表格已渲染", state?.hasTable);
-  check("浮动主题按钮已挂载", state?.toggle);
+  check("主题控件为三段式且有一段选中",
+    state?.segments === 3 && state?.activeSegments === 1,
+    `段数 ${state?.segments} 选中 ${state?.activeSegments}`);
   check("没有未捕获异常", errors.length === 0, errors.join(" | "));
   check("没有控制台错误", consoleErrors.length === 0, consoleErrors.join(" | "));
 

@@ -250,28 +250,48 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   filter: brightness(1.08);
 }
 .button.primary:active:not(:disabled) { filter: brightness(0.94); }
-/* 主题切换：右下角浮动小按钮，不占顶部栏的主操作位置 */
-.theme-toggle {
+/* 主题切换：浮动三段式控件，不占顶部栏的主操作位置。
+   放左下角而不是右下角 —— 右下角会压住 K3 卡片的「保存到 K3」按钮
+   （实测控件 y 697~739 与按钮 y 732~772 有重叠）。左侧是纯空白区。
+   用三段而不是单按钮循环：想从白天切到夜晚只需点一次。 */
+.theme-switch {
   position: fixed;
-  right: 18px;
-  bottom: 18px;
+  left: 18px;
+  /* 抬到状态栏文字之上，避免与页脚文案视觉重叠 */
+  bottom: 30px;
   z-index: 90;
-  width: 44px;
-  height: 44px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+.theme-segment {
+  width: 34px;
+  height: 34px;
   padding: 0;
   display: grid;
   place-items: center;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1;
-  border: 1px solid var(--border-strong);
+  border: 0;
   border-radius: 50%;
-  background: var(--surface);
+  background: transparent;
   color: var(--button-ink);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  cursor: pointer;
 }
-.theme-toggle:hover { border-color: var(--border-hover); background: var(--surface-raised); }
+.theme-segment:hover { background: var(--surface-raised); }
+/* 选中段用主色实心，一眼看出当前模式 */
+.theme-segment[aria-pressed="true"] {
+  background: var(--violet);
+  color: var(--on-accent);
+}
+.theme-segment:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 @media (max-width: 660px) {
-  .theme-toggle { right: 12px; bottom: 12px; width: 40px; height: 40px; font-size: 16px; }
+  .theme-switch { left: 12px; bottom: 22px; }
+  .theme-segment { width: 32px; height: 32px; font-size: 14px; }
 }
 .device-state {
   height: 54px;

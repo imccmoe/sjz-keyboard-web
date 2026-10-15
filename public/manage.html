@@ -100,8 +100,14 @@
     </section>
   </main>
 
+  <div class="theme-switch" role="group" aria-label="主题">
+    <button class="theme-segment" data-theme-choice="auto" type="button" title="跟随系统" aria-label="跟随系统">🌗</button>
+    <button class="theme-segment" data-theme-choice="light" type="button" title="白天" aria-label="白天">☀️</button>
+    <button class="theme-segment" data-theme-choice="dark" type="button" title="夜晚" aria-label="夜晚">🌙</button>
+  </div>
+
   <script type="module">
-    import { getThemeMode, modeIcon, modeName, cycleThemeMode } from "./theme.js";
+    import { getThemeMode, setThemeMode } from "./theme.js";
 
     const TOKEN_KEY = "sjz-admin-token";
     const $ = (id) => document.getElementById(id);
@@ -273,18 +279,22 @@
       if (remove) return removeSong(remove.dataset.delete);
     };
 
-    // 浮动主题按钮
-    const toggle = document.createElement("button");
-    toggle.className = "theme-toggle";
-    toggle.type = "button";
-    toggle.addEventListener("click", () => {
-      const mode = cycleThemeMode();
-      toggle.textContent = modeIcon(mode);
-      toggle.title = `主题：${modeName(mode)}`;
+    // 右下角三段式主题控件：一次点击直达目标模式，不弹提示。
+    // 属性名用 data-theme-choice，避开 <html> 上的 data-theme-mode。
+    function syncTheme() {
+      const current = getThemeMode();
+      document.querySelectorAll("[data-theme-choice]").forEach((segment) => {
+        const active = segment.dataset.themeChoice === current;
+        segment.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    }
+    document.querySelector(".theme-switch").addEventListener("click", (event) => {
+      const segment = event.target.closest("[data-theme-choice]");
+      if (!segment) return;
+      setThemeMode(segment.dataset.themeChoice);
+      syncTheme();
     });
-    toggle.textContent = modeIcon(getThemeMode());
-    toggle.title = `主题：${modeName(getThemeMode())}`;
-    document.body.appendChild(toggle);
+    syncTheme();
   </script>
 </body>
 </html>

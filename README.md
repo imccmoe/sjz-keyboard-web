@@ -115,7 +115,11 @@ scripts/dev.mjs         零依赖本地静态服务器
 
 ```powershell
 npm test              # 单元测试与主题/对比度检查（纯 Node，无需依赖与网络）
-npm run ui:contrast   # 用真实浏览器检查文字对比度（需先 npm run dev）
+npm run ui:theme      # 主题切换：耗时、不弹提示、三段式（需先 npm run dev）
+npm run ui:layout     # 布局：浮动控件位置与遮挡、星球坐标（需先 npm run dev）
+npm run ui:manage     # 曲库管理页可正常加载（需先 npm run dev）
+npm run ui:contrast   # 真实浏览器逐元素对比度（需先 npm run dev）
+npm run check:inline  # HTML 内联模块语法
 ```
 
 不需要安装任何依赖，Node 内置测试运行器即可。
@@ -137,12 +141,27 @@ npm run ui:contrast   # 用真实浏览器检查文字对比度（需先 npm run
   ✖ .eyebrow          3.76 (需 4.5)  rgb(106,90,224) on rgb(14,15,27)     "发现音乐"
 ```
 
-配色上有两条容易踩的约束，已由测试固定：
+### 主题切换
+
+右下角（窄屏为左下角）的三段式控件，**一次点击直达** 跟随系统 / 白天 / 夜晚，
+不循环、不弹提示。当前模式由选中段的高亮体现。
+
+有两条约束由测试固定，都是踩过坑的：
+
+- **按钮属性不能叫 `data-theme-mode`** —— 该属性已被 `<html>` 占用
+  （`theme.js` 会写 `root.dataset.themeMode`），撞名会让选择器多选出 `<html>`，选中态错乱。
+  按钮上用 `data-theme-choice`。
+- **浮动控件不能压住可交互元素**。右下角会遮住 K3 卡片的「保存到 K3」按钮
+  （实测控件 y 697–739 与按钮 y 732–772 重叠），因此改到左侧。
+
+### 配色约束
 
 - **主色要够暗**：`--violet` 用于按钮底色并承载白字，必须满足 4.5:1
   （`#7d6cf0` 只有 3.98，会把按钮文字变得难辨）
 - **紫色文字要另用变量**：同一个色既做底色又做文字会互相矛盾，
   深色底上的紫字用 `--violet-text`（比 `--violet` 更亮）
+- **主按钮的悬停态要显式声明底色与文字色**：`.button:hover` 与 `.button.primary`
+  优先级相同（都是 0,2,0），胜负只由书写顺序决定；通用规则已用 `:not(.primary)` 排除主按钮
 
 > `node --test` 会为每个测试文件派生一个子进程。若运行环境禁止 spawn（报 `EPERM`），
 > 逐个文件直接跑即可：`node tests/protocol.test.js`。

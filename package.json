@@ -11,7 +11,8 @@
     "ui:contrast": "node scripts/ui-contrast-check.mjs",
     "ui:layout": "node scripts/ui-layout-check.mjs",
     "check:inline": "node scripts/check-inline-modules.mjs public/manage.html public/index.html",
-    "ui:manage": "node scripts/ui-manage-check.mjs"
+    "ui:manage": "node scripts/ui-manage-check.mjs",
+    "ui:theme": "node scripts/ui-theme-timing.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

@@ -2,7 +2,7 @@ import { compileSong, formatDuration, startPreview, stopPreview } from "./music-
 import { BOOT_PID, inspectUpgradeDevices, MusicHidDevice, requestBootloader, uploadFirmware, waitForAppReenumeration, webHidSupported } from "./device.js";
 import { decryptFirmware } from "./firmware.js";
 import { KEY_USAGES, spinCounts } from "./device-config.js";
-import { cycleThemeMode, getThemeMode, modeIcon, modeName, setThemeMode, watchSystemTheme } from "./theme.js";
+import { cycleThemeMode, getThemeMode, modeName, setThemeMode, THEME_MODES, watchSystemTheme } from "./theme.js";
 
 const APP_VERSION = "1.15";
 const TEST_STAGE_LABELS = {
@@ -400,6 +400,14 @@ function renderAbout() {
 }
 
 function bindEvents() {
+  // 右下角三段式主题控件：一次点击直达目标模式（不循环、不弹提示）。
+  // 该控件在静态 HTML 里，不随 render() 重建，所以在这里绑定一次即可。
+  // 注意属性名是 data-theme-choice，不能叫 data-theme-mode ——
+  // 后者已经被 <html> 占用（theme.js 会写 root.dataset.themeMode），会互相干扰。
+  document.querySelector(".theme-switch")?.addEventListener("click", (event) => {
+    const segment = event.target.closest("[data-theme-choice]");
+    if (segment) switchTheme(segment.dataset.themeChoice);
+  });
   document.querySelector("#device-select")?.addEventListener("change", (event) => {
     state.selectedDeviceIndex = Number(event.target.value);
   });
@@ -519,22 +527,27 @@ function bindEvents() {
 }
 
 /**
- * 切换主题。这里**不能**调用 render()：那会重建页面节点，
+ * 切换主题。
+ *
+ * 这里**不能**调用 render()：那会重建页面节点，
  * 把「按键捕获」输入框里正在录制的按键状态清空。
- * 主题只需要改 <html data-theme>（由 theme.js 负责）加上浮动按钮的图标与提示。
+ *
+ * 不弹 toast —— 用户反馈「切换完不要出现主题：白天之类的」。
+ * 模式已经由控件上的选中态直观体现，再弹提示只是噪音。
+ *
+ * @param {string} [mode] 指定模式；不传则按 auto → light → dark 循环
  */
-function switchTheme() {
-  const mode = cycleThemeMode();
-  syncThemeButton(mode);
-  showToast(`主题：${modeName(mode)}`);
+function switchTheme(mode) {
+  const next = THEME_MODES.includes(mode) ? setThemeMode(mode) : cycleThemeMode();
+  syncThemeButton(next);
 }
 
-/** 把当前模式同步到右下角浮动按钮（图标 + 无障碍说明）。 */
+/** 把当前模式同步到右下角三段控件的选中态。 */
 function syncThemeButton(mode = getThemeMode()) {
-  document.querySelectorAll('[data-action="toggle-theme"]').forEach((button) => {
-    button.textContent = modeIcon(mode);
-    button.title = `主题：${modeName(mode)}（点击切换 跟随系统 → 白天 → 夜晚）`;
-    button.setAttribute("aria-label", `切换主题，当前${modeName(mode)}`);
+  document.querySelectorAll("[data-theme-choice]").forEach((segment) => {
+    const active = segment.dataset.themeChoice === mode;
+    segment.setAttribute("aria-pressed", active ? "true" : "false");
+    segment.title = `${modeName(segment.dataset.themeChoice)}${active ? "（当前）" : ""}`;
   });
 }
 
