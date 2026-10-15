@@ -178,7 +178,8 @@
       }
     }
 
-    function fillEditor(song) {
+    // 打开编辑栏；song 为空表示新增
+    function openEditor(song) {
       editingId = song?.id || null;
       $("editor-card").hidden = false;
       $("editor-title").textContent = song ? `编辑 #${song.music_id} ${song.title}` : "新增曲目";
@@ -190,6 +191,21 @@
       $("f-author").value = song?.author || "";
       $("f-verified").checked = song ? Boolean(song.verified) : true;
       $("editor-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // 收起编辑栏并清空字段。「取消编辑」和保存成功后都走这里：
+    // 之前取消编辑只是把表单重置成空的新增表单、并不收起，看起来像没生效。
+    function closeEditor() {
+      editingId = null;
+      $("editor-card").hidden = true;
+      $("editor-title").textContent = "新增曲目";
+      $("f-title").value = "";
+      $("f-score").value = "";
+      $("f-bpm").value = 120;
+      $("f-stage").value = "1";
+      $("f-difficulty").value = "";
+      $("f-author").value = "";
+      $("f-verified").checked = true;
     }
 
     async function submitSong() {
@@ -209,7 +225,7 @@
         } else {
           await api("./api/admin/songs", { method: "POST", body: JSON.stringify(body) });
         }
-        fillEditor(null);
+        closeEditor();
         await load();
       } catch (error) {
         setStatus(`保存失败：${error.message}`, true);
@@ -275,9 +291,9 @@
       setStatus("令牌已清除");
     };
     $("load").onclick = load;
-    $("new-song").onclick = () => fillEditor(null);
+    $("new-song").onclick = () => openEditor(null);
     $("submit-song").onclick = submitSong;
-    $("cancel-edit").onclick = () => fillEditor(null);
+    $("cancel-edit").onclick = closeEditor;
     $("import-merge").onclick = () => importSongs(pendingImport, "merge");
     $("import-replace").onclick = () => importSongs(pendingImport, "replace");
     $("import-file").onclick = () => $("import-file-input").click();
@@ -306,7 +322,7 @@
     syncImportButtons();
     $("rows").onclick = (event) => {
       const edit = event.target.closest("[data-edit]");
-      if (edit) return fillEditor(songs.find((song) => song.id === edit.dataset.edit));
+      if (edit) return openEditor(songs.find((song) => song.id === edit.dataset.edit));
       const remove = event.target.closest("[data-delete]");
       if (remove) return removeSong(remove.dataset.delete);
     };

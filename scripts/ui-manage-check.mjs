@@ -134,6 +134,23 @@ async function main() {
     editor.hidden === false && editor.title === "新增曲目" && editor.titleValue === "",
     JSON.stringify(editor));
 
+  // 回归：取消编辑此前只是把表单重置成空的新增表单、并不收起，看起来像没生效
+  await evaluate(`document.getElementById('cancel-edit').click()`);
+  await sleep(300);
+  const cancelled = JSON.parse((await evaluate(`JSON.stringify({
+    hidden: document.getElementById('editor-card').hidden,
+    titleValue: document.getElementById('f-title').value
+  })`)) || "{}");
+  check("「取消编辑」收起编辑栏并清空字段",
+    cancelled.hidden === true && cancelled.titleValue === "", JSON.stringify(cancelled));
+
+  await evaluate(`document.getElementById('new-song').click()`);
+  await sleep(300);
+  const reopened = await evaluate(`document.getElementById('editor-card').hidden`);
+  check("收起之后「新增曲目」仍可重新打开", reopened === false, String(reopened));
+  await evaluate(`document.getElementById('cancel-edit').click()`);
+  await sleep(200);
+
   const beforePick = JSON.parse((await evaluate(`JSON.stringify({
     merge: document.getElementById('import-merge').disabled,
     replace: document.getElementById('import-replace').disabled
@@ -183,6 +200,25 @@ async function main() {
     JSON.stringify(submitted.calls));
   check("导入后导入按钮回到禁用（避免重复导入）",
     submitted.merge === true && submitted.replace === true, JSON.stringify(submitted));
+
+  // 保存成功后同样要收起编辑栏（fetch 打桩，避免真的写入曲库）
+  const saved = JSON.parse((await evaluate(`(async () => {
+    document.getElementById('new-song').click();
+    document.getElementById('f-title').value = '检查用曲目';
+    document.getElementById('f-score').value = '1 2 3';
+    const originalFetch = window.fetch;
+    window.fetch = () => Promise.resolve(new Response(JSON.stringify({ ok: true, message: 'STUB' }),
+      { headers: { 'content-type': 'application/json' } }));
+    document.getElementById('submit-song').click();
+    await new Promise((r) => setTimeout(r, 500));
+    window.fetch = originalFetch;
+    return JSON.stringify({
+      hidden: document.getElementById('editor-card').hidden,
+      titleValue: document.getElementById('f-title').value
+    });
+  })()`)) || "{}");
+  check("保存成功后编辑栏收起并清空",
+    saved.hidden === true && saved.titleValue === "", JSON.stringify(saved));
 
   const lateErrors = client.events
     .filter((e) => e.method === "Runtime.exceptionThrown")
