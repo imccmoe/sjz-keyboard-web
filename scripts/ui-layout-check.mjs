@@ -147,11 +147,11 @@ async function main() {
     const rect = stage.getBoundingClientRect();
     const parentRect = parent.getBoundingClientRect();
     const ys = songs.map((n) => parseFloat(n.style.getPropertyValue('--y')));
-    // 星球是否都落在容器可视范围内
-    const inside = songs.every((n) => {
+    // 星球是否都落在容器可视范围内（不能有被裁掉的）
+    const outside = songs.filter((n) => {
       const r = n.getBoundingClientRect();
-      return r.top >= rect.top - 2 && r.bottom <= rect.bottom + 2;
-    });
+      return r.top < rect.top - 2 || r.bottom > rect.bottom + 2;
+    }).map((n) => n.textContent.trim());
     return {
       rendered: songs.length,
       uniquePositions: keys.length === new Set(keys).size,
@@ -159,9 +159,9 @@ async function main() {
       rectHeight: Math.round(rect.height),
       parentHeight: Math.round(parentRect.height),
       overflowY: getComputedStyle(stage).overflowY,
+      scrollable: stage.className.includes('scrollable'),
       minY: Math.min(...ys), maxY: Math.max(...ys),
-      allInside: inside,
-      // 星球底边与键位卡片顶边的关系：必须完全不重叠
+      outside,
       planetBottom: Math.round(rect.bottom),
       slotTop: Math.round(document.querySelector('.slot-row').getBoundingClientRect().top)
     };
@@ -171,12 +171,15 @@ async function main() {
     `渲染 ${planet?.rendered} / 曲库 ${catalogCount}`);
   check("每首歌有唯一坐标（(x,y) 不重复）", planet?.uniquePositions === true,
     `重复 ${planet?.duplicateCount} 组`);
-  check("纵向坐标铺满容器（8%~92%）", planet?.minY <= 10 && planet?.maxY >= 88,
-    `y 范围 ${planet?.minY}~${planet?.maxY}`);
-  check("所有星球都在容器可视范围内", planet?.allInside === true);
+  check("所有星球都在容器可视范围内（无裁切）",
+    (planet?.outside?.length ?? 1) === 0,
+    `被裁掉：${JSON.stringify(planet?.outside)}`);
   check("容器高度等于舞台高度（未被内容撑高）",
     planet?.rectHeight === planet?.parentHeight && planet?.rectHeight === 340,
     `planet=${planet?.rectHeight} stage=${planet?.parentHeight}`);
+  check("星球不滚动（坐标散落，无需滚动）",
+    planet?.scrollable === false && planet?.overflowY === "hidden",
+    `class 含 scrollable=${planet?.scrollable} overflowY=${planet?.overflowY}`);
   check("星球未压住下方键位卡片", (planet?.planetBottom || 0) <= (planet?.slotTop || 0),
     `星球底 ${planet?.planetBottom} vs 卡片顶 ${planet?.slotTop}`);
 

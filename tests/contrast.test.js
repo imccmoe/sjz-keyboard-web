@@ -107,8 +107,47 @@ test("开发服务器为静态资源提供 ETag，避免浏览器用旧缓存", 
   assert.match(html, /styles\.css\?v=\d+/, "样式表引用应带版本号，便于强制刷新");
 });
 
-test("正文与面板背景对比度达标", () => {
+/**
+ * 回归：键盘区的底盘与键帽原先在两套主题里都用同一组深色变量，
+ * 在浅色页面中表现为一条横贯全宽的深色大色块（用户反馈「不要出现一大块色块」）。
+ * 现在底盘与键帽都跟随主题，这里固定它们的对比度，避免以后调色时又变得看不清。
+ */
+test("键盘区底盘与键帽在两套主题下都清晰可读", () => {
   for (const marker of THEMES) {
+    const vars = themeVars(marker);
+    const pairs = [
+      ["--keycap-ink", "--keycap-bg", 4.5, "键帽文字"],
+      ["--deck-label-ink", "--deck-bg", 4.5, "底盘标题"],
+      ["--deck-sub-ink", "--deck-bg", 3.5, "底盘次要文字"]
+    ];
+    for (const [foreground, background, required, label] of pairs) {
+      assert.ok(vars[foreground] && vars[background], `${marker} 缺少 ${foreground} 或 ${background}`);
+      const ratio = contrast(vars[foreground], vars[background]);
+      assert.ok(ratio >= required,
+        `${marker} 的 ${label} ${vars[foreground]} 与 ${vars[background]} 对比度 ${ratio.toFixed(2)}，应 >= ${required}`);
+    }
+  }
+});
+
+test("键盘区底盘不得使用星空深色变量，且两套主题取值不同", () => {
+  // 成因断言：底盘曾用 --space-deck（星球视图那种 #15162f 深色），
+  // 在浅色页面里就是一大块深色。现在必须走独立的 --deck-bg。
+  const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const deckRule = /\.keyboard-deck\s*\{([^}]*)\}/.exec(code);
+  assert.ok(deckRule, "找不到 .keyboard-deck 规则");
+  assert.match(deckRule[1], /background:\s*var\(--deck-bg\)/,
+    "底盘背景应使用 --deck-bg");
+  assert.ok(!/var\(--space-deck\)/.test(deckRule[1]),
+    "底盘不应再使用 --space-deck（那是星球视图的深色）");
+
+  const light = themeVars(':root[data-theme="light"]');
+  const dark = themeVars(':root[data-theme="dark"]');
+  assert.ok(light["--deck-bg"] && dark["--deck-bg"], "两套主题都要定义 --deck-bg");
+  assert.notEqual(light["--deck-bg"], dark["--deck-bg"],
+    "--deck-bg 应随主题变化，否则总有一套主题会显得突兀");
+});
+
+test("正文与面板背景对比度达标", () => {  for (const marker of THEMES) {
     const vars = themeVars(marker);
     for (const [foreground, background] of [["--ink", "--canvas"], ["--ink", "--panel"], ["--muted", "--panel"]]) {
       assert.ok(vars[foreground] && vars[background], `${marker} 缺少 ${foreground} 或 ${background}`);

@@ -53,11 +53,17 @@
   --star-ink: #ffffff;
   --star-accent: #8ddbd2;
   --on-mint: #101126;
-  --keycap-border: #343653;
-  --keycap-shadow: #080912;
-  --keycap-bg: #25263f;
-  --keycap-ink: #ffffff;
-  --keycap-on: #111225;
+  /* 键盘区：底盘跟随主题（亮主题用淡灰），键帽做成凸起的浅色按键。
+     原先是整块深色底盘 + 深色键帽，在浅色页面里就是一条横贯全宽的大色块。 */
+  --deck-bg: var(--surface-sunken);
+  --deck-border: var(--border-divider);
+  --deck-label-ink: var(--ink);
+  --deck-sub-ink: var(--muted);
+  --keycap-bg: var(--surface);
+  --keycap-ink: var(--button-ink);
+  --keycap-border: var(--border-strong);
+  --keycap-shadow: #dcdde5;
+  --keycap-on: #101126;
   --keycap-on-shadow: #62bab0;
   --keycap-pressed: #2aba74;
   --role-ink: #46475b;
@@ -149,11 +155,16 @@
   --star-ink: #ffffff;
   --star-accent: #8ddbd2;
   --on-mint: var(--space-detail);
-  --keycap-border: #343653;
-  --keycap-shadow: #080912;
-  --keycap-bg: #25263f;
-  --keycap-ink: #ffffff;
-  --keycap-on: #111225;
+  /* 键盘区：暗主题下底盘用比画布略深的色，键帽略微提亮，形成「凸起按键」的层次 */
+  --deck-bg: var(--surface-sunken);
+  --deck-border: var(--border-divider);
+  --deck-label-ink: var(--ink);
+  --deck-sub-ink: var(--muted);
+  --keycap-bg: var(--surface-raised);
+  --keycap-ink: var(--button-ink);
+  --keycap-border: var(--border-strong);
+  --keycap-shadow: #0b0d18;
+  --keycap-on: #101126;
   --keycap-on-shadow: #62bab0;
   --keycap-pressed: #2aba74;
   --role-ink: #d3d6e6;
@@ -385,9 +396,7 @@ a.main-tab {
 .search-strip select { min-width: 190px; padding-right: 28px; }
 .search-strip input:focus { box-shadow: inset 0 0 0 2px var(--input-focus); }
 .search-strip span { color: var(--muted); font-size: 13px; white-space: nowrap; }
-/* 网格行必须给出确定高度：若用 grid-auto-rows: auto，行会被内容撑开，
-   则 `.planet` 的 height:100% 无法解析成确定值，padding 会把容器一路撑高，
-   反而盖住下方的键位卡片。 */
+/* 星球容器与右栏等高：星球坐标用百分比，不需要撑高容器 */
 .library-stage { height: 340px; display: grid; grid-template-columns: minmax(0, 1fr) 280px; grid-template-rows: 340px; gap: 10px; }
 .planet, .song-list {
   min-width: 0;
@@ -398,10 +407,6 @@ a.main-tab {
   border: 1px solid var(--space-line);
 }
 .planet { position: relative; }
-/* 星球容器高度固定为舞台高度；坐标由 JS 按曲目数用百分比铺满，
-   所以曲目变多只是排得更密，不会撑高容器或需要滚动。 */
-.planet.scrollable { overflow-y: auto; overflow-x: hidden; }
-.planet.scrollable::-webkit-scrollbar-thumb:hover { background: var(--focus-ring); }
 .planet::before, .planet::after {
   content: "";
   position: absolute;
@@ -527,11 +532,14 @@ a.main-tab {
   grid-template-columns: 130px repeat(3, minmax(0, 1fr));
   gap: 12px;
   align-items: stretch;
-  background: var(--space-deck);
-  color: var(--on-space);
+  /* 底盘跟随主题，只做一层淡背景；键帽才是视觉重心 */
+  background: var(--deck-bg);
+  border: 1px solid var(--deck-border);
+  color: var(--deck-label-ink);
 }
 .keyboard-deck > div { display: flex; flex-direction: column; justify-content: center; gap: 7px; }
-.keyboard-deck > div span { color: var(--list-sub-ink); font-size: 11px; }
+.keyboard-deck > div strong { color: var(--deck-label-ink); }
+.keyboard-deck > div span { color: var(--deck-sub-ink); font-size: 11px; }
 .keycap {
   min-width: 0; border: 1px solid var(--keycap-border); border-bottom: 4px solid var(--keycap-shadow);
   border-radius: 8px; background: var(--keycap-bg); color: var(--keycap-ink); display: grid; place-content: center; gap: 3px;

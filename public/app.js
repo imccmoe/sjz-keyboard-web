@@ -11,42 +11,32 @@ const TEST_STAGE_LABELS = {
   3: "阶段 3 · 游戏实测通过",
 };
 /**
- * 星球坐标：按曲目数动态铺满容器，行距用百分比表示，因此容器高度始终是固定的 340px。
+ * 星球坐标：每首歌一个位置，散落在容器里（百分比坐标）。
  *
- * 之前固定 20 组坐标 + `songs.slice(0, 20)`，第 21 首之后直接不渲染。
- * 现在改为：行数由曲目数决定，y 仍然用百分比，所以歌变多只是排得更密，
- * 不会撑高容器去压住下方的键位卡片，也不需要滚动。
+ * 前 20 组是原始设计，保持不动；第 21 组之后是续补的位置 ——
+ * 原先只有 20 组配 `songs.slice(0, 20)`，第 21 首起直接不渲染。
+ * 续补位置按纵向成组排布，保证同一行的几颗星球不会挤在一起。
  */
-const PLANET_ROWS_MIN = 6;
-const PLANET_ROWS_MAX = 11;
-const PLANET_TOP_Y = 8;
-const PLANET_BOTTOM_Y = 92;
-/** 每行最多放几颗星球（与横向坐标数量对应）。 */
-const PLANET_COLUMNS = 4;
-const PLANET_COLUMN_X = [16, 39, 62, 85];
-const PLANET_COLUMN_SCALE = [0.62, 0.72, 0.66, 0.6];
+const PLANET_POSITIONS = [
+  [54, 70, 1.18], [30, 35, 0.72], [62, 22, 0.66], [76, 42, 0.72], [20, 58, 0.55],
+  [45, 44, 0.82], [70, 70, 0.9], [84, 61, 0.55], [36, 70, 0.62], [16, 31, 0.56],
+  [87, 28, 0.68], [43, 18, 0.58], [25, 78, 0.7], [59, 51, 0.6], [72, 18, 0.58],
+  [12, 70, 0.54], [92, 76, 0.55], [33, 18, 0.52], [51, 83, 0.56], [81, 82, 0.58],
+  // 第 21~33 组：纵向落在 6%~29% 的空档，横向错开
+  [26, 8, 0.5], [44, 26, 0.54], [62, 8, 0.48], [80, 25, 0.52],
+  [18, 20, 0.5], [36, 9, 0.5], [70, 27, 0.48], [88, 12, 0.52],
+  [10, 44, 0.5], [28, 48, 0.52], [66, 38, 0.5], [90, 44, 0.48],
+  [14, 88, 0.5]
+];
 
-/** 按曲目数决定行数：太少会挤，太多会稀疏，这里夹在 6~11 行之间。 */
-function planetRowCount(count) {
-  const rows = Math.ceil(count / PLANET_COLUMNS);
-  return Math.min(PLANET_ROWS_MAX, Math.max(PLANET_ROWS_MIN, rows));
+/** 取得第 index 首的位置；超出预设时退回一个稳定的兜底坐标。 */
+function planetPosition(index) {
+  if (index < PLANET_POSITIONS.length) return PLANET_POSITIONS[index];
+  const overflow = index - PLANET_POSITIONS.length;
+  return [12 + (overflow % 5) * 19, 6 + (overflow % 4) * 6, 0.48];
 }
 
-/** 第 index 首的星球坐标与缩放。行内做一点错落，避免看起来像网格。 */
-function planetPosition(index, total = 20) {
-  const rows = planetRowCount(total);
-  const row = Math.floor(index / PLANET_COLUMNS) % rows;
-  const column = index % PLANET_COLUMNS;
-  const step = rows > 1 ? (PLANET_BOTTOM_Y - PLANET_TOP_Y) / (rows - 1) : 0;
-  // 相邻行横向错开，让分布看起来是散落的星空而不是表格
-  const jitter = (row % 2 === 0 ? 0 : 6) + ((index % 3) - 1) * 3;
-  const x = Math.max(6, Math.min(94, PLANET_COLUMN_X[column] + jitter));
-  const y = rows > 1 ? PLANET_TOP_Y + row * step : (PLANET_TOP_Y + PLANET_BOTTOM_Y) / 2;
-  // 行数越多星球越小，避免文字互相重叠
-  const density = rows / PLANET_ROWS_MIN;
-  const scale = Math.round((PLANET_COLUMN_SCALE[column] / Math.max(1, density * 0.82)) * 100) / 100;
-  return [Math.round(x * 10) / 10, Math.round(y * 10) / 10, Math.max(0.42, scale)];
-}const PLANET_COLORS = ["#86ddd4", "#aeb9e7", "#f2aab3", "#8fd4cb", "#9fd9f1", "#d8bb75"];
+const PLANET_COLORS = ["#86ddd4", "#aeb9e7", "#f2aab3", "#8fd4cb", "#9fd9f1", "#d8bb75"];
 const KEY_LABELS = { Space: "空格", Enter: "回车", Backspace: "退格", Delete: "删除",
   Up: "上方向", Down: "下方向", Left: "左方向", Right: "右方向" };
 const KEY_ORDER = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", ..."0123456789",
@@ -288,10 +278,9 @@ function renderLibrary() {
 
 function renderPlanet(songs) {
   if (!songs.length) return `<div class="planet empty-state">没有找到匹配的音乐</div>`;
-  // 容器高度固定（CSS 里的 340px），坐标用百分比按曲目数自动铺满，
-  // 因此歌变多只是排得更密，不会撑高容器压住下方的键位卡片。
+  // 容器高度固定（CSS 里的 340px），每首歌取 PLANET_POSITIONS 里的散落坐标。
   return `<div class="planet" aria-label="音乐星球">${songs.map((song, index) => {
-    const [x, y, scale] = planetPosition(index, songs.length);
+    const [x, y, scale] = planetPosition(index);
     const active = song.id === selectedSong()?.id;
     return `<button class="planet-song ${active ? "active" : ""}" draggable="true" data-song-id="${escapeHtml(song.id)}" style="--x:${x}%;--y:${y}%;--scale:${scale};--color:${PLANET_COLORS[index % PLANET_COLORS.length]};--delay:${-(index % 7)}s"><i></i><span>${escapeHtml(song.title)}</span></button>`;
   }).join("")}</div>`;
