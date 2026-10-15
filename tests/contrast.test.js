@@ -68,6 +68,41 @@ test("薄荷色按钮能承载深色文字（对比度 >= 4.5）", () => {
   }
 });
 
+/**
+ * 回归：用户报告「鼠标放到连接按钮上就变成白色」。
+ * 根因是层叠顺序 —— `.button:hover:not(:disabled)` 与 `.button.primary`
+ * 优先级相同（都是 0,2,0），而前者写在后面，于是悬停时底色被换成浅色面板色，
+ * 白字随之消失（实测亮色主题下对比度只有 1.04）。
+ * 因此主按钮的悬停态必须显式重新声明底色。
+ */
+test("主按钮的悬停态必须显式声明底色，不能被通用悬停规则覆盖", () => {
+  const css = fs.readFileSync(path.join(ROOT, "public", "styles.css"), "utf8");
+  const at = (pattern) => {
+    const match = pattern.exec(css);
+    assert.ok(match, `找不到 ${pattern}`);
+    return match.index;
+  };
+  const genericHover = at(/\.button:hover:not\(:disabled\)\s*\{/);
+  const primary = at(/\.button\.primary\s*\{/);
+  // 悬停规则本身可能带 :not(:disabled)，这里只取选择器主体
+  const primaryHoverMatch = /\.button\.primary:hover[^{]*\{([^}]*)\}/.exec(css);
+  assert.ok(primaryHoverMatch, "缺少 .button.primary:hover，悬停时底色会被通用规则覆盖");
+
+  assert.ok(primary > genericHover, "预期 .button.primary 写在通用悬停规则之后（同优先级时后者生效）");
+  assert.ok(primaryHoverMatch.index > primary, "主按钮悬停规则应写在 .button.primary 之后");
+
+  const hoverBody = primaryHoverMatch[1];
+  assert.match(hoverBody, /background:\s*var\(--violet\)/,
+    "主按钮悬停态必须重新声明 background: var(--violet)");
+  // 文字色不必重复声明（基础规则已设且未被覆盖），但若声明了就必须是前景色
+  // 注意用 (?:^|[\s;]) 边界，否则 "border-color:" 也会被匹配成 color
+  const declaredColor = /(?:^|[\s;])color:\s*([^;]+);/.exec(hoverBody)?.[1]?.trim();
+  if (declaredColor) {
+    assert.match(declaredColor, /var\(--on-(accent|space)\)/,
+      `主按钮悬停态声明的文字色 ${declaredColor} 不是前景色变量`);
+  }
+});
+
 test("正文与面板背景对比度达标", () => {
   for (const marker of THEMES) {
     const vars = themeVars(marker);

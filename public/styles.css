@@ -239,6 +239,11 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 }
 .button:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-raised); }
 .button.primary { border-color: var(--violet); background: var(--violet); color: var(--on-accent); }
+/* 悬停时必须重新声明底色：.button:hover 与 .button.primary 优先级相同（0,2,0），
+   而前者写在后面，会把紫色底换成浅色面板色，白字随之消失（对比度仅 1.04）。
+   这就是「鼠标放到连接按钮上就变成白色」的真正成因。 */
+.button.primary:hover:not(:disabled) { background: var(--violet); border-color: var(--violet); filter: brightness(1.08); }
+.button.primary:active:not(:disabled) { filter: brightness(0.94); }
 /* 主题切换按钮：与 .button 同尺寸，但不抢主操作视觉 */
 .theme-toggle {
   min-height: 40px;
