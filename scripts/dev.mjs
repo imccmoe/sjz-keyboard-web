@@ -10,6 +10,7 @@
 // 注意：WebHID 需要安全上下文，localhost / 127.0.0.1 被视为安全来源，
 // 所以本地开发可以直接使用；部署到线上必须走 HTTPS。
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -60,10 +61,23 @@ const server = http.createServer((request, response) => {
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("404 找不到该文件");
     return;
   }
+
+  const body = fs.readFileSync(target);
+  const stat = fs.statSync(target);
+  // 给出 ETag 与 Last-Modified：只有 Cache-Control: no-cache 而没有验证依据时，
+  // 浏览器可以继续使用弱缓存的旧文件 —— 这曾导致改完样式却看不到变化。
+  const etag = `"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 16)}"`;
+
+  if (request.headers["if-none-match"] === etag) {
+    response.writeHead(304, { etag, "cache-control": "no-cache, must-revalidate" }).end();
+    return;
+  }
   response.writeHead(200, {
     "content-type": MIME[path.extname(target)] || "application/octet-stream",
-    "cache-control": "no-cache"
-  }).end(fs.readFileSync(target));
+    "cache-control": "no-cache, must-revalidate",
+    etag,
+    "last-modified": stat.mtime.toUTCString()
+  }).end(body);
 });
 
 server.listen(PORT, () => {

@@ -69,38 +69,41 @@ test("薄荷色按钮能承载深色文字（对比度 >= 4.5）", () => {
 });
 
 /**
- * 回归：用户报告「鼠标放到连接按钮上就变成白色」。
- * 根因是层叠顺序 —— `.button:hover:not(:disabled)` 与 `.button.primary`
- * 优先级相同（都是 0,2,0），而前者写在后面，于是悬停时底色被换成浅色面板色，
- * 白字随之消失（实测亮色主题下对比度只有 1.04）。
- * 因此主按钮的悬停态必须显式重新声明底色。
+ * 回归：用户报告「鼠标放到连接按钮上就变成白色」，连续两次反馈后决定**彻底去掉按钮悬停变色**。
+ * 根因是 `.button:hover` 与 `.button.primary` 优先级相同（都是 0,2,0），胜负只由书写顺序决定。
+ * 现在通过两条约束避免复发：
+ *   1. 不存在 `.button` / `.button.primary` 的 :hover 背景规则
+ *   2. 主按钮的 color 用 inherit，永远继承基础规则（--button-ink），
+ *      即使将来有人误加悬停规则，文字也不会变成白色
  */
-test("主按钮的悬停态必须显式声明底色，不能被通用悬停规则覆盖", () => {
-  const css = fs.readFileSync(path.join(ROOT, "public", "styles.css"), "utf8");
-  const at = (pattern) => {
-    const match = pattern.exec(css);
-    assert.ok(match, `找不到 ${pattern}`);
-    return match.index;
-  };
-  const genericHover = at(/\.button:hover:not\(:disabled\)\s*\{/);
-  const primary = at(/\.button\.primary\s*\{/);
-  // 悬停规则本身可能带 :not(:disabled)，这里只取选择器主体
-  const primaryHoverMatch = /\.button\.primary:hover[^{]*\{([^}]*)\}/.exec(css);
-  assert.ok(primaryHoverMatch, "缺少 .button.primary:hover，悬停时底色会被通用规则覆盖");
+test("主按钮不参与悬停变色，文字色使用前景变量", () => {
+  // 先剥掉注释，否则注释里提到的 `.button:hover` 会被当成真实规则
+  const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const buttonHoverRules = [
+    ...code.matchAll(/([^{}]*\.button[^{}]*:hover[^{}]*)\{([^}]*)\}/g)
+  ].map((match) => ({ selector: match[1].trim(), body: match[2] }));
 
-  assert.ok(primary > genericHover, "预期 .button.primary 写在通用悬停规则之后（同优先级时后者生效）");
-  assert.ok(primaryHoverMatch.index > primary, "主按钮悬停规则应写在 .button.primary 之后");
+  assert.deepEqual(buttonHoverRules, [],
+    `不应再为 .button 定义悬停规则，实际存在：${buttonHoverRules.map((r) => r.selector).join(" / ")}`);
 
-  const hoverBody = primaryHoverMatch[1];
-  assert.match(hoverBody, /background:\s*var\(--violet\)/,
-    "主按钮悬停态必须重新声明 background: var(--violet)");
-  // 文字色不必重复声明（基础规则已设且未被覆盖），但若声明了就必须是前景色
-  // 注意用 (?:^|[\s;]) 边界，否则 "border-color:" 也会被匹配成 color
-  const declaredColor = /(?:^|[\s;])color:\s*([^;]+);/.exec(hoverBody)?.[1]?.trim();
-  if (declaredColor) {
-    assert.match(declaredColor, /var\(--on-(accent|space)\)/,
-      `主按钮悬停态声明的文字色 ${declaredColor} 不是前景色变量`);
-  }
+  const primary = /\.button\.primary\s*\{([^}]*)\}/.exec(code);
+  assert.ok(primary, "找不到 .button.primary");
+  assert.match(primary[1], /background:\s*var\(--violet\)/, "主按钮底色应保持紫色");
+  // 不能用 inherit：按钮 color 默认继承父元素的 --button-ink，实测只有 3.46 的对比度
+  assert.ok(!/color:\s*inherit/.test(primary[1]),
+    "主按钮的文字色不能用 inherit，会继承到深色的 --button-ink");
+  assert.match(primary[1], /color:\s*var\(--on-accent\)/,
+    "主按钮文字应使用 --on-accent（两套主题都是白色）");
+});
+
+test("开发服务器为静态资源提供 ETag，避免浏览器用旧缓存", () => {
+  // 改完样式看不到变化，多半是弱缓存命中。dev.mjs 必须给出验证依据。
+  const dev = fs.readFileSync(path.join(ROOT, "scripts", "dev.mjs"), "utf8");
+  assert.match(dev, /etag/i, "dev.mjs 未提供 ETag");
+  assert.match(dev, /last-modified/i, "dev.mjs 未提供 Last-Modified");
+  assert.match(dev, /304/, "dev.mjs 未处理条件请求（应返回 304）");
+  const html = fs.readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
+  assert.match(html, /styles\.css\?v=\d+/, "样式表引用应带版本号，便于强制刷新");
 });
 
 test("正文与面板背景对比度达标", () => {

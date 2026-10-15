@@ -237,13 +237,12 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   color: var(--button-ink);
   font-weight: 700;
 }
-.button:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-raised); }
+/* 按钮不做悬停变色。原因：`.button:hover` 与 `.button.primary` 优先级相同（都是 0,2,0），
+   胜负只由书写顺序决定；曾经因此让悬停时的紫色底被换成浅色、白字消失（对比度 1.04）。
+   这里直接去掉 `.button` 的悬停背景变化。
+   注意：主按钮的文字色必须用 --on-accent 这类前景变量，不能用 inherit ——
+   按钮的 color 默认继承父元素（--button-ink，可能很深），实测会得到 3.46 的对比度。 */
 .button.primary { border-color: var(--violet); background: var(--violet); color: var(--on-accent); }
-/* 悬停时必须重新声明底色：.button:hover 与 .button.primary 优先级相同（0,2,0），
-   而前者写在后面，会把紫色底换成浅色面板色，白字随之消失（对比度仅 1.04）。
-   这就是「鼠标放到连接按钮上就变成白色」的真正成因。 */
-.button.primary:hover:not(:disabled) { background: var(--violet); border-color: var(--violet); filter: brightness(1.08); }
-.button.primary:active:not(:disabled) { filter: brightness(0.94); }
 /* 主题切换按钮：与 .button 同尺寸，但不抢主操作视觉 */
 .theme-toggle {
   min-height: 40px;
