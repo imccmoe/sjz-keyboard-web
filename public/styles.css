@@ -399,35 +399,41 @@ a.main-tab {
    用 scrollbar-width/scrollbar-color（标准）加 ::-webkit-scrollbar（Chromium）。 */
 .planet,
 .song-list,
-.upgrade-log {
+.upgrade-log,
+.detail-body {
   scrollbar-width: thin;
   scrollbar-color: var(--space-ring) transparent;
 }
 .planet::-webkit-scrollbar,
 .song-list::-webkit-scrollbar,
-.upgrade-log::-webkit-scrollbar {
+.upgrade-log::-webkit-scrollbar,
+.detail-body::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 .planet::-webkit-scrollbar-track,
 .song-list::-webkit-scrollbar-track,
-.upgrade-log::-webkit-scrollbar-track {
+.upgrade-log::-webkit-scrollbar-track,
+.detail-body::-webkit-scrollbar-track {
   background: transparent;
 }
 .planet::-webkit-scrollbar-thumb,
 .song-list::-webkit-scrollbar-thumb,
-.upgrade-log::-webkit-scrollbar-thumb {
+.upgrade-log::-webkit-scrollbar-thumb,
+.detail-body::-webkit-scrollbar-thumb {
   background: var(--space-ring);
   border-radius: 999px;
 }
 .planet::-webkit-scrollbar-thumb:hover,
 .song-list::-webkit-scrollbar-thumb:hover,
-.upgrade-log::-webkit-scrollbar-thumb:hover {
+.upgrade-log::-webkit-scrollbar-thumb:hover,
+.detail-body::-webkit-scrollbar-thumb:hover {
   background: var(--focus-ring);
 }
 .planet::-webkit-scrollbar-corner,
 .song-list::-webkit-scrollbar-corner,
-.upgrade-log::-webkit-scrollbar-corner {
+.upgrade-log::-webkit-scrollbar-corner,
+.detail-body::-webkit-scrollbar-corner {
   background: transparent;
 }
 .planet::before, .planet::after {
@@ -489,7 +495,13 @@ a.main-tab {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* 面板高度由舞台固定（340px）。内容（长标题 + 两段简介）超出时
+     必须在**面板内部**消化，否则会溢出把下方「拖到你的键盘」与键位卡片挤掉。
+     这里只允许 .detail-body 滚动，其余部分（阶段选择、试听按钮）保持原位。 */
+  overflow: hidden;
 }
+/* 简介可伸缩：有富余就撑开，内容长了就在内部滚动 */
+.detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .song-detail h2 { margin: 0 0 7px; font-size: 22px; overflow-wrap: anywhere; }
 .song-detail p { color: var(--detail-sub-ink); margin: 0 0 12px; font-size: 13px; line-height: 1.55; }
 .status-chip, .preview-chip {

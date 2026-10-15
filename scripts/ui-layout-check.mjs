@@ -127,6 +127,63 @@ async function main() {
     (toggle?.coveredElements?.length ?? 1) === 0,
     `压在：${JSON.stringify(toggle?.coveredElements)}`);
 
+  console.log("\n[乐曲简介不压缩下方间距]");
+  // 回归：长标题 + 两段简介会让右侧面板溢出 21px，把下方「拖到你的键盘」与
+  // K1~K3 卡片的间距挤掉。现在简介在面板内部滚动，下方间距必须恒定。
+  const detailProbe = `(() => {
+    const r = (sel) => { const n = document.querySelector(sel); if (!n) return null;
+      const b = n.getBoundingClientRect(); return { top: Math.round(b.top), h: Math.round(b.height) }; };
+    const panel = document.querySelector('.song-detail');
+    const body = document.querySelector('.detail-body');
+    return {
+      title: (document.querySelector('.song-detail h2') || {}).textContent || '',
+      panelH: panel ? Math.round(panel.getBoundingClientRect().height) : null,
+      panelOverflow: panel ? panel.scrollHeight - panel.clientHeight : null,
+      panelOverflowStyle: panel ? getComputedStyle(panel).overflow : null,
+      hasBody: Boolean(body),
+      bodyScrollable: body ? body.scrollHeight > body.clientHeight : null,
+      slotHeadingTop: r('.slot-heading')?.top ?? null,
+      slotRowTop: r('.slot-row')?.top ?? null,
+      stageH: r('.library-stage')?.h ?? null
+    };
+  })()`;
+
+  // 依次选中标题长短不同的曲目，比较下方间距是否被压缩
+  const snapshots = [];
+  const titles = await evaluate(`[...document.querySelectorAll('.planet-song')].map((n) => n.textContent.trim())`);
+  const pick = [titles?.[0], titles?.find((t) => t.length >= 8), titles?.find((t) => t.length <= 4)].filter(Boolean);
+  for (const title of [...new Set(pick)]) {
+    await evaluate(`(() => {
+      const btn = [...document.querySelectorAll('.planet-song')].find((n) => n.textContent.trim() === ${JSON.stringify(title)});
+      if (btn) btn.click();
+      return Boolean(btn);
+    })()`);
+    await sleep(400);
+    snapshots.push(await evaluate(detailProbe));
+  }
+
+  for (const snap of snapshots) {
+    console.log(`    「${snap.title}」 面板 ${snap.panelH}px 溢出 ${snap.panelOverflow} 简介区可滚动=${snap.bodyScrollable} 卡片顶 ${snap.slotRowTop}`);
+  }
+  const distinctTitles = snapshots.length >= 2 && new Set(snapshots.map((s) => s.title)).size >= 2;
+  check("能选中标题长短不同的曲目进行对比", distinctTitles,
+    JSON.stringify(snapshots.map((s) => s.title)));
+  check("右侧面板高度恒等于舞台高度（内容不撑高面板）",
+    snapshots.every((s) => s.panelH === 340 && s.stageH === 340),
+    JSON.stringify(snapshots.map((s) => ({ h: s.panelH, stage: s.stageH }))));
+  check("右侧面板自身不产生溢出滚动",
+    snapshots.every((s) => s.panelOverflow === 0 && s.panelOverflowStyle === "hidden"),
+    JSON.stringify(snapshots.map((s) => `${s.title}:溢出${s.panelOverflow}/${s.panelOverflowStyle}`)));
+  check("下方「拖到你的键盘」位置不随简介变化",
+    new Set(snapshots.map((s) => s.slotHeadingTop)).size === 1,
+    JSON.stringify(snapshots.map((s) => s.slotHeadingTop)));
+  check("下方键位卡片位置不随简介变化",
+    new Set(snapshots.map((s) => s.slotRowTop)).size === 1,
+    JSON.stringify(snapshots.map((s) => s.slotRowTop)));
+  check("简介超长时在面板内部滚动（而非溢出）",
+    snapshots.some((s) => s.bodyScrollable === true) || snapshots.every((s) => s.bodyScrollable === false),
+    JSON.stringify(snapshots.map((s) => `${s.title}:${s.bodyScrollable}`)));
+
   console.log("\n[星球视图]");
   const planet = await evaluate(`(() => {
     const stage = document.querySelector('.planet');

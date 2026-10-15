@@ -292,12 +292,14 @@ function renderSongList(songs) {
 }
 
 function renderSongDetail(song) {
-  if (!song) return `<aside class="song-detail"><span class="detail-eyebrow">当前星球</span><h2>选择一颗音乐星球</h2><p>单击查看，双击可以直接试听。</p><span class="status-chip">等待选择</span><button class="preview-button" disabled>试听</button></aside>`;
+  if (!song) return `<aside class="song-detail"><span class="detail-eyebrow">当前星球</span><div class="detail-body"><h2>选择一颗音乐星球</h2><p>单击查看，双击可以直接试听。</p></div><span class="status-chip">等待选择</span><button class="preview-button" disabled>试听</button></aside>`;
   return `<aside class="song-detail">
     <span class="detail-eyebrow">当前星球</span>
-    <h2>${escapeHtml(song.title)}</h2>
-    <p>${escapeHtml(song.author)}</p>
-    <p>编号 #${song.music_id} · ${escapeHtml(song.difficulty)} · ${song.bpm} BPM · ${formatDuration(song.compiled.durationMs)}<br>${state.libraryMode === "planet" ? "按住星球拖到下方键位即可选中。" : "从列表拖到下方键位，双击可以直接试听。"}</p>
+    <div class="detail-body">
+      <h2>${escapeHtml(song.title)}</h2>
+      <p>${escapeHtml(song.author)}</p>
+      <p>编号 #${song.music_id} · ${escapeHtml(song.difficulty)} · ${song.bpm} BPM · ${formatDuration(song.compiled.durationMs)}<br>${state.libraryMode === "planet" ? "按住星球拖到下方键位即可选中。" : "从列表拖到下方键位，双击可以直接试听。"}</p>
+    </div>
     <span class="status-chip">${stageLabel(song)}</span>
     <label class="stage-editor"><span>测试阶段</span><select id="detail-stage" aria-label="测试阶段">${Object.entries(TEST_STAGE_LABELS).map(([stage, label]) => `<option value="${stage}" ${song.test_stage === Number(stage) ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     <button class="preview-button" data-action="preview-song" data-song-id="${escapeHtml(song.id)}">${state.previewSongId === song.id ? "停止" : "试听"}</button>
