@@ -357,31 +357,117 @@ a.main-tab {
 }
 .view-switch > button.active, .segmented button.active { background: var(--violet); color: var(--on-accent); }
 
+/* 搜索筛选栏：标签 + 搜索框 + 阶段下拉 + 匹配计数。
+   控件统一成胶囊造型，图标用内联 SVG（currentColor，随主题自适应）。 */
 .search-strip {
-  min-height: 50px;
+  min-height: 54px;
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) minmax(190px, auto) auto;
+  grid-template-columns: auto minmax(200px, 1fr) minmax(180px, 240px) auto;
   align-items: center;
-  gap: 18px;
-  padding: 8px 13px;
+  gap: 12px;
+  padding: 8px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 13px;
   margin-bottom: 10px;
 }
-.search-strip strong { font-size: 16px; }
-.search-strip input, .search-strip select {
-  height: 32px;
-  border: 0;
-  border-radius: 16px;
-  padding: 0 14px;
+.search-label {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  padding-left: 2px;
+}
+/* 输入框与下拉共用的胶囊容器 */
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 18px;
   background: var(--surface-sunken);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.field:hover { border-color: var(--border-strong); }
+.field:focus-within {
+  border-color: var(--focus-ring);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--violet-soft);
+}
+.field-icon {
+  display: grid;
+  place-items: center;
+  padding-left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+/* 内部控件去掉自身边框，交给 .field 统一呈现 */
+.field input,
+.field select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
   color: var(--ink);
   outline: 0;
+  font: inherit;
+  font-size: 13px;
 }
-.search-strip select { min-width: 190px; padding-right: 28px; }
-.search-strip input:focus { box-shadow: inset 0 0 0 2px var(--input-focus); }
-.search-strip span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.search-field input { padding: 0 6px 0 8px; }
+.search-field input::-webkit-search-cancel-button { display: none; }
+.field-clear {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--control-ink);
+  cursor: pointer;
+}
+.field-clear:hover { background: var(--border-divider); color: var(--ink); }
+.field-clear.hidden { display: none; }
+/* 自定义下拉：隐藏原生箭头，用自带 chevron 保证两套主题一致 */
+.select-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding: 0 30px 0 14px;
+}
+.field-chevron {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 1.8px solid var(--control-ink);
+  border-bottom: 1.8px solid var(--control-ink);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.match-count {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  text-align: right;
+}
+/* 有筛选条件时用主色标注，和「无筛选」的默认灰区分开 */
+.match-count.filtered {
+  color: var(--violet-text);
+  font-weight: 700;
+}
+@media (max-width: 860px) {
+  .search-strip { grid-template-columns: 1fr; gap: 8px; }
+  .search-label { grid-column: 1 / -1; }
+  .match-count { grid-column: 1 / -1; text-align: left; }
+}
 /* 星球容器与右栏等高：星球坐标用百分比，不需要撑高容器 */
 .library-stage { height: 340px; display: grid; grid-template-columns: minmax(0, 1fr) 280px; grid-template-rows: 340px; gap: 10px; }
 .planet, .song-list {
@@ -717,9 +803,10 @@ footer {
   .page-heading { align-items: flex-start; flex-direction: column; min-height: 0; margin-bottom: 16px; }
   .view-switch { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
   .view-switch .button { grid-column: 1 / -1; }
-  .search-strip { grid-template-columns: 1fr auto; }
-  .search-strip input { grid-column: 1 / -1; grid-row: 2; }
-  .search-strip select { grid-column: 1 / -1; grid-row: 3; width: 100%; }
+  .search-strip { grid-template-columns: 1fr; gap: 8px; }
+  .search-label, .search-field, .select-field, .match-count { grid-column: 1 / -1; }
+  .select-field, .search-field { width: 100%; }
+  .match-count { text-align: left; }
   .planet {
     min-height: 0;
     padding: 10px;

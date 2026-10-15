@@ -12,7 +12,8 @@
     "ui:layout": "node scripts/ui-layout-check.mjs",
     "check:inline": "node scripts/check-inline-modules.mjs public/manage.html public/index.html",
     "ui:manage": "node scripts/ui-manage-check.mjs",
-    "ui:theme": "node scripts/ui-theme-timing.mjs"
+    "ui:theme": "node scripts/ui-theme-timing.mjs",
+    "ui:search": "node scripts/ui-search-check.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

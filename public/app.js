@@ -37,6 +37,9 @@ function planetPosition(index) {
 }
 
 const PLANET_COLORS = ["#86ddd4", "#aeb9e7", "#f2aab3", "#8fd4cb", "#9fd9f1", "#d8bb75"];
+/** 搜索栏用的内联图标（与文字同色，随主题自动适配）。 */
+const SEARCH_ICON = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.6"/><path d="M10.6 10.6 L14 14"/></svg>`;
+const CLEAR_ICON = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 4 L12 12 M12 4 L4 12"/></svg>`;
 const KEY_LABELS = { Space: "空格", Enter: "回车", Backspace: "退格", Delete: "删除",
   Up: "上方向", Down: "下方向", Left: "左方向", Right: "右方向" };
 const KEY_ORDER = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", ..."0123456789",
@@ -265,9 +268,28 @@ function renderLibrary() {
   const songs = filteredSongs();
   const song = selectedSong();
   const switches = `<div class="view-switch" role="group"><button class="${state.libraryMode === "planet" ? "active" : ""}" data-library-mode="planet">星球视图</button><button class="${state.libraryMode === "list" ? "active" : ""}" data-library-mode="list">全部音乐&nbsp; ${songs.length}</button><button class="button" data-action="reload-library">重新加载</button></div>`;
+  const searching = Boolean(state.search);
+  const stageFiltered = state.stageFilter > 0;
   return `
     ${pageHeading("发现音乐", "音乐星球", "像浏览星空一样选歌。单击查看，双击试听，也可以直接拖到 K1～K3。", switches)}
-    <section class="search-strip"><strong>查找星球</strong><input id="song-search" value="${escapeHtml(state.search)}" placeholder="搜索歌名、作者、难度或测试阶段" /><select id="stage-filter" aria-label="测试阶段筛选"><option value="0">全部阶段</option>${Object.entries(TEST_STAGE_LABELS).map(([stage, label]) => `<option value="${stage}" ${state.stageFilter === Number(stage) ? "selected" : ""}>${label}</option>`).join("")}</select><span>${state.libraryMode === "planet" ? `星球展示 ${songs.length} 首` : `全部 ${songs.length} 首音乐`}</span></section>
+    <section class="search-strip">
+      <span class="search-label">查找星球</span>
+      <div class="field search-field">
+        <span class="field-icon" aria-hidden="true">${SEARCH_ICON}</span>
+        <input id="song-search" type="search" value="${escapeHtml(state.search)}" placeholder="搜索歌名、作者、难度或测试阶段" aria-label="搜索曲目" />
+        <button class="field-clear ${searching ? "" : "hidden"}" data-action="clear-search" type="button" aria-label="清空搜索" title="清空搜索">${CLEAR_ICON}</button>
+      </div>
+      <div class="field select-field">
+        <select id="stage-filter" aria-label="测试阶段筛选">
+          <option value="0">全部阶段</option>
+          ${Object.entries(TEST_STAGE_LABELS).map(([stage, label]) => `<option value="${stage}" ${state.stageFilter === Number(stage) ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
+        <span class="field-chevron" aria-hidden="true"></span>
+      </div>
+      <span class="match-count ${searching || stageFiltered ? "filtered" : ""}">
+        ${searching || stageFiltered ? `匹配 ${songs.length} 首` : `${state.libraryMode === "planet" ? "星球展示" : "全部"} ${songs.length} 首`}
+      </span>
+    </section>
     <div class="library-stage">
       ${state.libraryMode === "planet" ? renderPlanet(songs) : renderSongList(songs)}
       ${renderSongDetail(song)}
@@ -412,6 +434,16 @@ function bindEvents() {
     const input = document.querySelector("#song-search");
     input?.focus();
     input?.setSelectionRange(input.value.length, input.value.length);
+  });
+  // Esc 清空搜索（有内容时），已空则退出输入框
+  document.querySelector("#song-search")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    if (!state.search) return;
+    state.search = "";
+    state.selectedSongId = filteredSongs()[0]?.id || null;
+    render();
+    document.querySelector("#song-search")?.focus();
   });
   document.querySelector("#stage-filter")?.addEventListener("change", (event) => {
     state.stageFilter = Number(event.target.value);
@@ -630,6 +662,13 @@ function handleAction(button) {
   if (action === "scan-device") return scanDevices();
   if (action === "connect-device") return state.pendingApp ? completeFirmwareUpdate() : connectDevice();
   if (action === "reload-library") return loadCatalog(true);
+  if (action === "clear-search") {
+    state.search = "";
+    state.selectedSongId = filteredSongs()[0]?.id || null;
+    render();
+    document.querySelector("#song-search")?.focus();
+    return;
+  }
   if (action === "reload-mapping") return readKeyboardConfig(true);
   if (action === "save-mapping") return saveKeyboardConfig();
   if (action === "reload-led") return readLedConfig(true);

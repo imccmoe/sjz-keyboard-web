@@ -176,7 +176,30 @@ test("所有滚动区域的滚动条都要自定义，不能用系统默认", ()
   }
 });
 
-test("正文与面板背景对比度达标", () => {  for (const marker of THEMES) {
+test("搜索筛选栏的文字与图标在两套主题下都可读", () => {
+  // 搜索栏用了多个色板变量，逐个固定对比度，避免以后调色看不见
+  for (const marker of THEMES) {
+    const vars = themeVars(marker);
+    const pairs = [
+      ["--ink", "--surface", 4.5, "「查找星球」标签"],
+      ["--ink", "--surface-sunken", 4.5, "搜索框与下拉里的文字"],
+      ["--muted", "--surface-sunken", 3.0, "占位符与放大镜图标"],
+      ["--violet-text", "--surface", 4.5, "筛选后的「匹配 N 首」计数"],
+      ["--muted", "--surface", 3.5, "默认计数"],
+      ["--control-ink", "--surface-sunken", 3.0, "下拉箭头"],
+      ["--control-ink", "--surface-soft", 3.0, "清空按钮图标"]
+    ];
+    for (const [foreground, background, required, label] of pairs) {
+      assert.ok(vars[foreground] && vars[background], `${marker} 缺少 ${foreground} 或 ${background}`);
+      const ratio = contrast(vars[foreground], vars[background]);
+      assert.ok(ratio >= required,
+        `${marker} 的${label} ${vars[foreground]} 与 ${vars[background]} 对比度 ${ratio.toFixed(2)}，应 >= ${required}`);
+    }
+  }
+});
+
+test("正文与面板背景对比度达标", () => {
+  for (const marker of THEMES) {
     const vars = themeVars(marker);
     for (const [foreground, background] of [["--ink", "--canvas"], ["--ink", "--panel"], ["--muted", "--panel"]]) {
       assert.ok(vars[foreground] && vars[background], `${marker} 缺少 ${foreground} 或 ${background}`);
