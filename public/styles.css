@@ -46,9 +46,6 @@
   --detail-sub-ink: #b7bacb;
   --chip-bg: #2a2b4a;
   --chip-ink: #d8d9e5;
-  --dark-input-border: #3b3d5d;
-  --dark-input-bg: #1c1d36;
-  --dark-input-ink: #f4f4f8;
   --focus-ring: #8377dc;
   --star-ink: #ffffff;
   --star-accent: #8ddbd2;
@@ -148,9 +145,6 @@
   --detail-sub-ink: #b7bacb;
   --chip-bg: #2a2b4a;
   --chip-ink: #d8d9e5;
-  --dark-input-border: #3b3d5d;
-  --dark-input-bg: #1c1d36;
-  --dark-input-ink: #f4f4f8;
   --focus-ring: #6f63d8;
   --star-ink: #ffffff;
   --star-accent: #8ddbd2;
@@ -230,15 +224,14 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .brand-block span { font-size: 13px; }
 .device-controls { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .device-controls label { font-size: 13px; white-space: nowrap; }
-.device-controls select {
+/* 设备选择：外包 .select-wrap 统一美化（原生箭头已隐藏），这里控制尺寸与强调色边框 */
+.device-controls .select-wrap {
   width: 225px;
   height: 42px;
-  padding: 0 38px 0 13px;
-  border: 1px solid var(--violet);
+  border-color: var(--violet);
   border-radius: 12px;
-  background: var(--surface);
-  color: var(--ink);
 }
+.device-controls .select-wrap select { padding: 0 30px 0 13px; }
 .button {
   min-height: 40px;
   border: 1px solid var(--border-strong);
@@ -405,7 +398,8 @@ a.main-tab {
 }
 /* 内部控件去掉自身边框，交给 .field 统一呈现 */
 .field input,
-.field select {
+.field select,
+.select-wrap select {
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
@@ -434,13 +428,17 @@ a.main-tab {
 }
 .field-clear:hover { background: var(--border-divider); color: var(--ink); }
 .field-clear.hidden { display: none; }
-/* 自定义下拉：隐藏原生箭头，用自带 chevron 保证两套主题一致 */
-.select-field select {
+/* 自定义下拉：隐藏原生箭头（各系统画法不同、深浅主题下不一致），
+   统一用自带 chevron。.select-field 是搜索栏专用（胶囊 + 大圆角），
+   .select-wrap 是通用下拉容器（供设备选择 / 按键录入 / 灯光模式等复用）。 */
+.field select,
+.select-wrap select {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
   padding: 0 30px 0 14px;
 }
+.select-field select { padding: 0 30px 0 14px; }
 .field-chevron {
   position: absolute;
   right: 13px;
@@ -452,6 +450,26 @@ a.main-tab {
   transform: translateY(-70%) rotate(45deg);
   pointer-events: none;
 }
+/* 通用下拉容器：与 .field 同一套观感，圆角略小以适配表单里的高度 */
+.select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.select-wrap:hover { border-color: var(--border-hover); }
+.select-wrap:focus-within {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--violet-soft);
+}
+.select-wrap > select { width: 100%; }
+.select-wrap .field-chevron { right: 12px; }
 .match-count {
   color: var(--muted);
   font-size: 13px;
@@ -599,12 +617,18 @@ a.main-tab {
   font-size: 12px;
   font-weight: 700;
 }
-.stage-editor { display: grid; gap: 5px; margin-top: 10px; }
-.stage-editor span { color: var(--detail-sub-ink); font-size: 12px; }
-.stage-editor select {
-  width: 100%; min-width: 0; height: 34px; border: 1px solid var(--dark-input-border); border-radius: 7px;
-  padding: 0 9px; background: var(--dark-input-bg); color: var(--dark-input-ink);
+.status-chip, .preview-chip {
+  align-self: flex-start;
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: var(--chip-bg);
+  color: var(--chip-ink);
+  font-size: 12px;
+  font-weight: 700;
 }
+/* 「当前星球」面板里的测试阶段下拉已移除：
+   那一栏只用于浏览与试听，改阶段属于内容维护，放在曲库管理页更合适。
+   面板里的阶段信息由 .status-chip 直接展示。 */
 .preview-button {
   margin-top: auto;
   min-height: 40px;
@@ -701,7 +725,9 @@ a.main-tab {
 .key-entry input, .key-entry select {
   height: 43px; border: 1px solid var(--border-accent-soft); border-radius: 8px; padding: 0 13px; background: var(--surface-input); color: var(--accent-ink); font-weight: 800;
 }
-.key-entry select { background: var(--surface); color: var(--ink); }
+/* 按键录入的下拉交给 .select-wrap 统一呈现，这里只覆盖高度与配色 */
+.key-entry .select-wrap { height: 43px; border-color: var(--border-accent-soft); background: var(--surface); }
+.key-entry .select-wrap select { padding: 0 30px 0 13px; background: transparent; color: var(--ink); font-weight: 800; }
 .output-box {
   min-height: 58px; border: 1px solid var(--border-accent-soft); border-radius: 8px; background: var(--surface-input);
   padding: 10px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -722,7 +748,8 @@ a.main-tab {
 
 .led-card { margin-bottom: 10px; padding: 17px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .led-card h2 { margin: 0 0 12px; font-size: 18px; }
-.led-card > select { min-width: 180px; height: 38px; margin-right: 16px; padding: 0 9px; border: 1px solid var(--border-accent-soft); border-radius: 8px; }
+/* 控制模式下拉：外包 .select-wrap 统一美化，这里只控制宽度与间距 */
+.led-card .select-wrap { display: inline-flex; min-width: 180px; margin-right: 16px; vertical-align: middle; }
 .led-card p { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
 .led-color { display: inline-flex; align-items: center; gap: 10px; margin: 0 20px 9px 0; font-size: 13px; }
 .led-color input { width: 45px; height: 35px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
@@ -795,7 +822,7 @@ footer {
   .topbar { min-height: 0; padding: 14px; flex-direction: column; gap: 14px; }
   .device-controls { width: 100%; display: grid; grid-template-columns: 1fr 1fr; justify-content: stretch; }
   .device-controls label { grid-column: 1 / -1; }
-  .device-controls select { grid-column: 1 / -1; width: 100%; }
+  .device-controls .select-wrap { grid-column: 1 / -1; width: 100%; }
   .device-state { height: 40px; }
   .main-tabs { height: 50px; overflow: hidden; }
   .main-tab { min-width: 0; width: 20%; flex: 1; padding: 0 3px; font-size: 12px; }

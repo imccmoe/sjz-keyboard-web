@@ -232,11 +232,14 @@ function render() {
         <div class="brand-block"><strong>SJZ</strong><span>把喜欢的音乐装进键盘</span></div>
         <div class="device-controls">
           <label for="device-select">我的设备</label>
-          <select id="device-select" aria-label="我的设备">
-            ${state.devices.length
-              ? state.devices.map((device, index) => `<option value="${index}" ${state.selectedDeviceIndex === index ? "selected" : ""}>${device.productId === BOOT_PID ? "SJZ 键盘（更新模式）" : escapeHtml(device.productName === "Music Pad" ? "SJZ 键盘" : device.productName || "SJZ 键盘")} ${state.devices.length > 1 ? `(${index + 1})` : ""}</option>`).join("")
-              : `<option>${escapeHtml(state.device.label)}</option>`}
-          </select>
+          <div class="select-wrap">
+            <select id="device-select" aria-label="我的设备">
+              ${state.devices.length
+                ? state.devices.map((device, index) => `<option value="${index}" ${state.selectedDeviceIndex === index ? "selected" : ""}>${device.productId === BOOT_PID ? "SJZ 键盘（更新模式）" : escapeHtml(device.productName === "Music Pad" ? "SJZ 键盘" : device.productName || "SJZ 键盘")} ${state.devices.length > 1 ? `(${index + 1})` : ""}</option>`).join("")
+                : `<option>${escapeHtml(state.device.label)}</option>`}
+            </select>
+            <span class="field-chevron" aria-hidden="true"></span>
+          </div>
           <button class="button" data-action="scan-device">刷新已授权设备</button>
           <button class="button primary" data-action="connect-device">连接</button>
           <span class="device-state ${state.device.connected ? "online" : ""}">${deviceStatus}</span>
@@ -323,7 +326,6 @@ function renderSongDetail(song) {
       <p>编号 #${song.music_id} · ${escapeHtml(song.difficulty)} · ${song.bpm} BPM · ${formatDuration(song.compiled.durationMs)}<br>${state.libraryMode === "planet" ? "按住星球拖到下方键位即可选中。" : "从列表拖到下方键位，双击可以直接试听。"}</p>
     </div>
     <span class="status-chip">${stageLabel(song)}</span>
-    <label class="stage-editor"><span>测试阶段</span><select id="detail-stage" aria-label="测试阶段">${Object.entries(TEST_STAGE_LABELS).map(([stage, label]) => `<option value="${stage}" ${song.test_stage === Number(stage) ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     <button class="preview-button" data-action="preview-song" data-song-id="${escapeHtml(song.id)}">${state.previewSongId === song.id ? "停止" : "试听"}</button>
   </aside>`;
 }
@@ -355,7 +357,7 @@ function renderMapping() {
         <p class="spin-note">鼠标灵敏度 × 水平灵敏度 × 扭矩 = 36000；按住实体键持续旋转，松开停止。APP V1.10 起内置轻微垂直补偿。</p>
         <div class="form-row"><label>触发方式</label><div class="segmented"><button class="${mapping.mode === "single" ? "active" : ""}" data-map-mode="single" ${keyLocked}>单键</button><button class="${mapping.mode === "combo" ? "active" : ""}" data-map-mode="combo" ${keyLocked}>组合键</button></div></div>
         <div class="form-row"><label>修饰键</label><div class="modifier-row">${["Ctrl", "Shift", "Alt", "Win"].map((name) => `<label><input type="checkbox" data-modifier="${name}" ${mapping.modifiers.includes(name) ? "checked" : ""} ${mapping.mode === "single" || keyLocked ? "disabled" : ""}> ${name}</label>`).join("")}</div></div>
-        <div class="form-row"><label for="key-capture">按键录入</label><div class="key-entry"><input id="key-capture" value="${escapeHtml(mapping.role === "key" ? mappingText(mapping) : mapping.key)}" readonly ${keyLocked}><select id="key-select" ${keyLocked}>${options.map(([label, value]) => `<option value="${escapeHtml(value)}" ${mapping.key === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></div></div>
+        <div class="form-row"><label for="key-capture">按键录入</label><div class="key-entry"><input id="key-capture" value="${escapeHtml(mapping.role === "key" ? mappingText(mapping) : mapping.key)}" readonly ${keyLocked}><div class="select-wrap"><select id="key-select" ${keyLocked}>${options.map(([label, value]) => `<option value="${escapeHtml(value)}" ${mapping.key === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select><span class="field-chevron" aria-hidden="true"></span></div></div></div>
         <div class="output-box"><span>最终输出</span><strong>${escapeHtml(mappingText(mapping))}</strong></div>
         <div class="editor-actions"><button class="button" data-action="reset-mapping" ${locked}>恢复默认</button><button class="button primary" data-action="apply-mapping" ${locked}>应用到当前键位</button></div>
       </section>
@@ -374,7 +376,7 @@ function renderLed() {
   const ready = state.device.connected && state.ledLoaded && !state.upgrading;
   const disabled = ready ? "" : "disabled";
   return `${pageHeading("RGB 灯光", "灯光设置", "选择工作方式和三个按键的颜色；只有点击“保存到键盘”才会写入设备 Flash。")}
-    <section class="led-card"><h2>控制模式</h2><select id="led-mode" ${disabled}>${[[0, "按下点亮"], [1, "常亮"], [2, "流水灯"]].map(([mode, label]) => `<option value="${mode}" ${led.mode === mode ? "selected" : ""}>${label}</option>`).join("")}</select><label><input id="led-random" type="checkbox" ${led.randomColors ? "checked" : ""} ${ready && led.mode === 2 ? "" : "disabled"}> 流水时使用随机颜色</label><p>${["按下对应按键时点亮，松开后熄灭。", "三个灯以最高 50% 亮度常亮。", "按 K1 → K2 → K3 顺序流水。"][led.mode]}</p></section>
+    <section class="led-card"><h2>控制模式</h2><div class="select-wrap"><select id="led-mode" ${disabled}>${[[0, "按下点亮"], [1, "常亮"], [2, "流水灯"]].map(([mode, label]) => `<option value="${mode}" ${led.mode === mode ? "selected" : ""}>${label}</option>`).join("")}</select><span class="field-chevron" aria-hidden="true"></span></div><label><input id="led-random" type="checkbox" ${led.randomColors ? "checked" : ""} ${ready && led.mode === 2 ? "" : "disabled"}> 流水时使用随机颜色</label><p>${["按下对应按键时点亮，松开后熄灭。", "三个灯以最高 50% 亮度常亮。", "按 K1 → K2 → K3 顺序流水。"][led.mode]}</p></section>
     <section class="led-card"><h2>按键颜色</h2>${led.colors.map((color, slot) => `<label class="led-color">K${slot + 1} <input type="color" data-led-color="${slot}" value="#${color.map((value) => value.toString(16).padStart(2, "0")).join("")}" ${ready && !(led.mode === 2 && led.randomColors) ? "" : "disabled"}> RGB ${color.join(", ")}</label>`).join("")}</section>
     <section class="led-card"><h2>亮度保护</h2><p>所有模式的最大亮度固定为 50%（128/255）。</p></section>
     <div class="led-actions"><span>${escapeHtml(state.ledMessage)}</span><button class="button primary" data-action="reload-led" ${state.device.connected && !state.upgrading ? "" : "disabled"}>重新读取</button><button class="button primary" data-action="save-led" ${ready ? "" : "disabled"}>保存到键盘</button></div>`;
@@ -448,15 +450,6 @@ function bindEvents() {
   document.querySelector("#stage-filter")?.addEventListener("change", (event) => {
     state.stageFilter = Number(event.target.value);
     state.selectedSongId = filteredSongs()[0]?.id || null;
-    render();
-  });
-  document.querySelector("#detail-stage")?.addEventListener("change", (event) => {
-    const song = selectedSong();
-    if (!song) return;
-    song.test_stage = normalizeTestStage(event.target.value);
-    state.stageOverrides[song.id] = song.test_stage;
-    state.songs.sort((left, right) => left.test_stage - right.test_stage || left.catalogIndex - right.catalogIndex);
-    persist();
     render();
   });
   document.querySelectorAll("[data-song-id]").forEach((node) => {
