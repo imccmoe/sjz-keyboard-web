@@ -85,11 +85,12 @@
 
     <section class="manage-card">
       <div class="manage-row" style="margin-bottom:12px">
-        <button class="button" id="import-merge">JSON 合并导入</button>
-        <button class="button" id="import-replace">JSON 替换导入</button>
-        <button class="button" id="import-file">导入本地 JSON 文件</button>
+        <button class="button" id="new-song">新增曲目</button>
+        <button class="button" id="import-file">选择 JSON 文件…</button>
+        <button class="button" id="import-merge" disabled>合并导入</button>
+        <button class="button" id="import-replace" disabled>替换导入</button>
         <input id="import-file-input" type="file" accept=".json,application/json" hidden />
-        <span class="manage-status">合并 = 同编号更新；替换 = 先清空再写入</span>
+        <span class="manage-status" id="import-status">先选择 JSON 文件；合并 = 同编号更新，替换 = 先清空再写入</span>
       </div>
       <table class="manage-table">
         <thead>
@@ -110,6 +111,8 @@
     const $ = (id) => document.getElementById(id);
     let songs = [];
     let editingId = null;
+    // 已选择、尚未导入的曲目数组：导入分两步（先选文件，再选合并 / 替换）
+    let pendingImport = null;
 
     const token = () => $("token").value.trim();
     const setStatus = (message, isError = false) => {
@@ -225,20 +228,39 @@
       }
     }
 
+    function setImportStatus(message, isError = false) {
+      const node = $("import-status");
+      node.textContent = message;
+      node.style.color = isError ? "var(--rose, #c0392b)" : "";
+    }
+
+    // 没有选中文件时禁用两个导入按钮：避免「点了没反应」，
+    // 也避免拿空列表走替换导入把曲库清空。
+    function syncImportButtons() {
+      const ready = Array.isArray(pendingImport) && pendingImport.length > 0;
+      $("import-merge").disabled = !ready;
+      $("import-replace").disabled = !ready;
+    }
+
     async function importSongs(payload, mode) {
-      const list = Array.isArray(payload) ? payload : payload.songs;
-      if (!Array.isArray(list)) { setStatus("JSON 里找不到 songs 数组", true); return; }
+      const list = Array.isArray(payload) ? payload : payload?.songs;
+      if (!Array.isArray(list) || !list.length) {
+        setImportStatus("请先选择要导入的 JSON 文件", true);
+        return;
+      }
       if (mode === "replace" && !confirm(`替换导入会先清空现有 ${songs.length} 首，确定继续？`)) return;
-      setStatus(`导入中（${list.length} 首，${mode}）…`);
+      setImportStatus(`导入中（${list.length} 首，${mode}）…`);
       try {
         const result = await api(`./api/admin/songs?mode=${mode}`, {
           method: "POST",
           body: JSON.stringify({ songs: list })
         });
+        pendingImport = null;
+        syncImportButtons();
         await load();
-        setStatus(`${result.message}，当前共 ${result.total} 首`);
+        setImportStatus(`${result.message}，当前共 ${result.total} 首`);
       } catch (error) {
-        setStatus(`导入失败：${error.message}`, true);
+        setImportStatus(`导入失败：${error.message}`, true);
       }
     }
 
@@ -253,22 +275,35 @@
       setStatus("令牌已清除");
     };
     $("load").onclick = load;
+    $("new-song").onclick = () => fillEditor(null);
     $("submit-song").onclick = submitSong;
     $("cancel-edit").onclick = () => fillEditor(null);
-    $("import-merge").onclick = () => importSongs(window.__pendingImport || { songs: [] }, "merge");
-    $("import-replace").onclick = () => importSongs(window.__pendingImport || { songs: [] }, "replace");
+    $("import-merge").onclick = () => importSongs(pendingImport, "merge");
+    $("import-replace").onclick = () => importSongs(pendingImport, "replace");
     $("import-file").onclick = () => $("import-file-input").click();
     $("import-file-input").onchange = async (event) => {
       const file = event.target.files?.[0];
+      event.target.value = "";                       // 允许再次选择同一个文件
       if (!file) return;
       try {
-        window.__pendingImport = JSON.parse(await file.text());
-        setStatus(`已载入文件 ${file.name}，请选择「合并导入」或「替换导入」`);
+        const payload = JSON.parse(await file.text());
+        const list = Array.isArray(payload) ? payload : payload?.songs;
+        if (!Array.isArray(list) || !list.length) {
+          pendingImport = null;
+          syncImportButtons();
+          setImportStatus(`文件 ${file.name} 里没有可导入的曲目（需要非空的 songs 数组）`, true);
+          return;
+        }
+        pendingImport = list;
+        syncImportButtons();
+        setImportStatus(`已选择 ${file.name}：${list.length} 首，请点「合并导入」或「替换导入」`);
       } catch (error) {
-        setStatus(`文件不是合法 JSON：${error.message}`, true);
+        pendingImport = null;
+        syncImportButtons();
+        setImportStatus(`文件不是合法 JSON：${error.message}`, true);
       }
-      event.target.value = "";
     };
+    syncImportButtons();
     $("rows").onclick = (event) => {
       const edit = event.target.closest("[data-edit]");
       if (edit) return fillEditor(songs.find((song) => song.id === edit.dataset.edit));

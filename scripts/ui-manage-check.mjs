@@ -117,6 +117,78 @@ async function main() {
   check("没有控制台错误", consoleErrors.length === 0, consoleErrors.join(" | "));
 
   console.log(`\n  状态栏文案：${state?.statusText}`);
+
+  // ---- 新增入口与 JSON 导入的两步流程 ----
+  // 回归：编辑表单原本只在点「编辑」时才出现，页面上没有「新增曲目」入口；
+  // 两个导入按钮在没有选择文件时也可点，会发出 {"songs":[]} ——
+  // 其中替换导入会清空整个曲库。
+  console.log("\n[新增与导入]");
+  await evaluate(`document.getElementById('new-song').click()`);
+  await sleep(300);
+  const editor = JSON.parse((await evaluate(`JSON.stringify({
+    hidden: document.getElementById('editor-card').hidden,
+    title: document.getElementById('editor-title').textContent,
+    titleValue: document.getElementById('f-title').value
+  })`)) || "{}");
+  check("「新增曲目」打开的是空表单",
+    editor.hidden === false && editor.title === "新增曲目" && editor.titleValue === "",
+    JSON.stringify(editor));
+
+  const beforePick = JSON.parse((await evaluate(`JSON.stringify({
+    merge: document.getElementById('import-merge').disabled,
+    replace: document.getElementById('import-replace').disabled
+  })`)) || "{}");
+  check("未选择文件时两个导入按钮为禁用",
+    beforePick.merge === true && beforePick.replace === true, JSON.stringify(beforePick));
+
+  const picked = JSON.parse((await evaluate(`(async () => {
+    const payload = { songs: [{ id: 'ui-check-song', music_id: 999, title: '检查用曲目', score: '1 2 3', bpm: 100, verified: true }] };
+    const input = document.getElementById('import-file-input');
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([JSON.stringify(payload)], 'ui-check.json', { type: 'application/json' }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change'));
+    await new Promise((r) => setTimeout(r, 400));
+    return JSON.stringify({
+      status: document.getElementById('import-status').textContent,
+      merge: document.getElementById('import-merge').disabled,
+      replace: document.getElementById('import-replace').disabled
+    });
+  })()`)) || "{}");
+  check("选择 JSON 文件后启用导入并显示首数",
+    picked.merge === false && picked.replace === false && /1 首/.test(picked.status || ""),
+    JSON.stringify(picked));
+
+  // 打桩 fetch 后再点合并导入：只为看清请求内容，避免真的写入曲库
+  const submitted = JSON.parse((await evaluate(`(async () => {
+    window.__calls = [];
+    const originalFetch = window.fetch;
+    window.fetch = (url, options) => {
+      window.__calls.push({ url: String(url), body: options?.body });
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, message: 'STUB', total: 0 }),
+        { headers: { 'content-type': 'application/json' } }));
+    };
+    document.getElementById('import-merge').click();
+    await new Promise((r) => setTimeout(r, 600));
+    window.fetch = originalFetch;
+    return JSON.stringify({
+      calls: window.__calls,
+      merge: document.getElementById('import-merge').disabled,
+      replace: document.getElementById('import-replace').disabled
+    });
+  })()`)) || "{}");
+  const posted = (submitted.calls || []).find((call) => /mode=merge/.test(call.url));
+  check("点「合并导入」发送的是所选文件里的曲目",
+    Boolean(posted) && /ui-check-song/.test(posted.body || ""),
+    JSON.stringify(submitted.calls));
+  check("导入后导入按钮回到禁用（避免重复导入）",
+    submitted.merge === true && submitted.replace === true, JSON.stringify(submitted));
+
+  const lateErrors = client.events
+    .filter((e) => e.method === "Runtime.exceptionThrown")
+    .map((e) => e.params?.exceptionDetails?.exception?.description || e.params?.exceptionDetails?.text);
+  check("新增与导入交互过程中没有未捕获异常", lateErrors.length === 0, lateErrors.join(" | "));
+
   client.close?.();
 }
 
