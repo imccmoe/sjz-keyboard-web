@@ -147,6 +147,34 @@ test("键盘区底盘不得使用星空深色变量，且两套主题取值不�
     "--deck-bg 应随主题变化，否则总有一套主题会显得突兀");
 });
 
+test("所有滚动区域的滚动条都要自定义，不能用系统默认", () => {
+  const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  // 这三个是页面里真正会滚动的容器：
+  //   .song-list   「全部音乐」列表（用户实际看到滚动条的地方）
+  //   .planet      星球视图（曲目多于坐标时）
+  //   .upgrade-log 固件升级日志
+  const scrollables = [".song-list", ".planet", ".upgrade-log"];
+  for (const selector of scrollables) {
+    assert.match(code, new RegExp(`\\${selector}::-webkit-scrollbar-thumb`),
+      `${selector} 缺少 WebKit 滚动条滑块样式`);
+    assert.match(code, new RegExp(`\\${selector}::-webkit-scrollbar-track`),
+      `${selector} 缺少 WebKit 滚动条轨道样式`);
+  }
+  assert.match(code, /scrollbar-width:\s*thin/, "缺少 scrollbar-width: thin（标准属性）");
+  assert.match(code, /scrollbar-color:\s*var\(--space-ring\)\s+transparent/,
+    "缺少 scrollbar-color，轨道应为透明");
+  assert.match(code, /::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent/,
+    "WebKit 滚动条轨道应为透明");
+  assert.match(code, /::-webkit-scrollbar-thumb\s*\{[^}]*border-radius:\s*999px/,
+    "滚动条滑块应做圆角，避免生硬的方块");
+
+  for (const marker of THEMES) {
+    const vars = themeVars(marker);
+    assert.ok(vars["--space-ring"], `${marker} 缺少 --space-ring（滚动条滑块颜色）`);
+    assert.ok(vars["--focus-ring"], `${marker} 缺少 --focus-ring（滚动条悬停色）`);
+  }
+});
+
 test("正文与面板背景对比度达标", () => {  for (const marker of THEMES) {
     const vars = themeVars(marker);
     for (const [foreground, background] of [["--ink", "--canvas"], ["--ink", "--panel"], ["--muted", "--panel"]]) {
