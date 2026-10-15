@@ -1,0 +1,8 @@
+node_modules/
+.npm-cache/
+.dev.vars
+.env
+.env.*
+
+# 本地开发产物
+.shots/

@@ -1,0 +1,15 @@
+{
+  "name": "sjz-keyboard-web",
+  "version": "1.15.0",
+  "private": true,
+  "type": "module",
+  "description": "SJZ 三键音乐键盘网页端：WebHID 写入音乐、键位与灯光配置，并完成固件升级",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "dev": "node scripts/dev.mjs",
+    "serve": "python -m http.server 8788 --directory public"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

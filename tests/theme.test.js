@@ -1,0 +1,89 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const read = (relative) => fs.readFileSync(path.join(ROOT, relative), "utf8");
+
+/** 取出某个选择器块内的 --变量名。 */
+function varsIn(css, startMarker, endMarker) {
+  const start = css.indexOf(startMarker);
+  assert.ok(start >= 0, `找不到 ${startMarker}`);
+  const sliced = endMarker ? css.slice(start, css.indexOf(endMarker, start)) : css.slice(start);
+  return [...sliced.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((match) => match[1]);
+}
+
+test("styles.css 的亮/暗主题定义了完全相同的变量集合", () => {
+  const css = read("public/styles.css");
+  const light = new Set(varsIn(css, ':root[data-theme="light"]', ':root[data-theme="dark"]'));
+  const dark = new Set(varsIn(css, ':root[data-theme="dark"]'));
+  assert.ok(light.size > 5, `亮色主题变量过少（${light.size}）`);
+  assert.ok(dark.size > 5, `暗色主题变量过少（${dark.size}）`);
+
+  const onlyLight = [...light].filter((name) => !dark.has(name));
+  const onlyDark = [...dark].filter((name) => !light.has(name));
+  assert.deepEqual(onlyLight, [], "这些变量只在亮色主题定义，暗色下会取不到值");
+  assert.deepEqual(onlyDark, [], "这些变量只在暗色主题定义，亮色下会取不到值");
+});
+
+test("样式表没有自引用变量", () => {
+  const css = read("public/styles.css");
+  const broken = [...css.matchAll(/^\s*(--[a-z0-9-]+)\s*:\s*var\(\1\)\s*;/gm)].map((match) => match[1]);
+  assert.deepEqual(broken, [], `存在自引用变量：${broken.join(", ")}`);
+});
+
+test("样式表正文不再散落硬编码颜色（除变量定义块外）", () => {
+  const css = read("public/styles.css");
+  const body = css.replace(/:root[^{]*\{[^}]*\}/gs, "");
+  const hex = [...body.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) => match[0]);
+  assert.deepEqual([...new Set(hex)], [], `正文仍有硬编码颜色：${[...new Set(hex)].join(" ")}`);
+});
+
+test("页面在样式表之前设置 data-theme，避免主题闪烁", () => {
+  const html = read("public/index.html");
+  const scriptAt = html.indexOf("dataset.theme");
+  const linkAt = html.search(/<link[^>]+stylesheet/);
+  assert.ok(scriptAt > 0, "缺少主题引导脚本");
+  assert.ok(linkAt > 0, "缺少样式表引用");
+  assert.ok(scriptAt < linkAt, "主题脚本必须在样式表之前执行");
+  assert.match(html, /prefers-color-scheme: dark/, "引导脚本未读取系统偏好");
+  assert.match(html, /zh-hub-theme/, "引导脚本未读取已保存的主题");
+});
+
+test("theme.js 的三档模式与持久化键与引导脚本一致", () => {
+  const theme = read("public/theme.js");
+  assert.match(theme, /export const THEME_MODES = \["auto", "light", "dark"\]/);
+  assert.match(theme, /export const THEME_KEY = "zh-hub-theme"/);
+  const bootstrapKey = /localStorage\.getItem\("([^"]+)"\)/.exec(read("public/index.html"))?.[1];
+  assert.equal(bootstrapKey, "zh-hub-theme");
+});
+
+test("主题切换只有一条触发路径，避免重复绑定导致跳过模式", () => {
+  // 回归：曾经既在 [data-action] 分发里处理 toggle-theme，又额外给按钮绑了一次
+  // switchTheme，一次点击触发两次，auto 直接跳过 light 跳到 dark。
+  const app = read("public/app.js");
+  const directBindings = [...app.matchAll(/addEventListener\("click",\s*switchTheme\)/g)];
+  assert.equal(directBindings.length, 0, "不应再直接给主题按钮绑定 switchTheme");
+  assert.match(app, /if \(action === "toggle-theme"\) return switchTheme\(\);/,
+    "handleAction 必须处理 toggle-theme");
+  const buttons = [...app.matchAll(/<button[^>]*data-action="toggle-theme"/g)];
+  assert.equal(buttons.length, 1, `主题按钮应只有一个，实际 ${buttons.length}`);
+});
+
+test("切换主题不得重建页面（否则会清空正在录制的交互状态）", () => {
+  const app = read("public/app.js");
+  const body = /function switchTheme\(\)\s*\{([\s\S]*?)\n\}/.exec(app)?.[1] || "";
+  assert.ok(body.length > 0, "找不到 switchTheme 实现");
+  assert.ok(!/\brender\(/.test(body), "switchTheme 内不应调用 render()");
+});
+
+test("页面不引用其他站点或配装方案资源", () => {
+  // 本仓库是独立的键盘网页端，不应残留指向配装站的链接或数据引用。
+  for (const file of ["public/app.js", "public/index.html"]) {
+    const source = read(file);
+    assert.ok(!source.includes("/hub/"), `${file} 仍引用 /hub/`);
+    assert.ok(!source.includes("orzice"), `${file} 仍引用 orzice`);
+  }
+  assert.ok(!fs.existsSync(path.join(ROOT, "public/data/schemes.json")), "不应携带配装方案数据");
+});
