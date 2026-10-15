@@ -3,18 +3,59 @@
 SJZ 三键音乐键盘的网页配置工具。通过 **WebHID** 直连键盘，把音乐、键位与灯光配置写进设备，
 并支持在浏览器里完成固件升级。
 
-本仓库**只包含键盘网页端**，是纯静态站点，没有后端、没有构建步骤。
+前端是纯静态站点，**没有构建步骤**；曲库存在 **Cloudflare D1**，通过 Pages Functions 提供 API。
+
+## 曲库与 D1
+
+曲目存在 Cloudflare D1 里（不再是写死的 JSON 文件），可以随时通过管理页增删改，
+无需改代码重新部署。
+
+| 路径 | 说明 |
+| --- | --- |
+| `GET /api/songs` | 曲库列表，支持 `stage`、`q`、`sort`、`limit`、`offset` |
+| `GET /api/songs/:id` | 单曲详情，`:id` 支持主键、曲目编号或标题 |
+| `GET/POST /api/admin/songs` | 管理端列表 / 新增 / 批量导入（需令牌） |
+| `GET/PATCH/DELETE /api/admin/songs/:id` | 管理端单曲读写与删除（需令牌） |
+| `/manage.html` | 网页版曲库管理界面 |
+
+管理接口用 `Authorization: Bearer <ADMIN_TOKEN>` 鉴权，令牌比较是常数时间实现。
+
+### 首次部署
+
+```powershell
+# 1. 建库，把输出的 database_id 填进 wrangler.toml
+npx wrangler d1 create sjz-keyboard-web
+
+# 2. 建表
+npx wrangler d1 migrations apply sjz-keyboard-web --remote
+
+# 3. 从 JSON 快照导入现有 25 首曲目
+npm run db:seed
+npx wrangler d1 execute sjz-keyboard-web --remote --file seeds/songs.sql
+
+# 4. 设置管理令牌，然后部署
+npx wrangler pages secret put ADMIN_TOKEN
+npx wrangler pages deploy
+```
+
+也可以不走 wrangler，直接调 API 批量导入（`/manage.html` 页面上有「导入本地 JSON 文件」按钮）。
+
+### 本地开发
+
+```powershell
+npm run dev                      # 纯静态服务器，曲库回退到 JSON 快照
+npx wrangler pages dev public    # 带 Functions 与本地 D1
+```
+
+`.dev.vars` 里放 `ADMIN_TOKEN=...`（已被 gitignore）。
+
+> 前端在 API 不可用时会**自动回退**到 `public/data/music-catalog.json` 快照，
+> 所以只用静态服务器也能完整浏览曲库。
 
 ## 本地运行
 
 ```powershell
 npm run dev          # 零依赖静态服务器，默认 http://127.0.0.1:8788
-```
-
-或者用任意静态服务器：
-
-```powershell
-python -m http.server 8788 --directory public
 ```
 
 在 Chrome 或 Edge 打开 `http://127.0.0.1:8788`，点击右上角「连接」选择 SJZ 键盘。
@@ -84,7 +125,8 @@ npm run ui:contrast   # 用真实浏览器检查文字对比度（需先 npm run
 | `tests/protocol.test.js` | 曲包协议、旋转灵敏度换算、键位/灯光往返、加密固件校验 |
 | `tests/device-wire.test.js` | WebHID 报文往返、OTA 分区基址、旋转键 v1→v2 过渡 |
 | `tests/theme.test.js` | 亮暗变量集合一致、无自引用变量、无硬编码颜色、主题只有一条触发路径、前景色不误用背景色 |
-| `tests/contrast.test.js` | 主色承载白字、薄荷底承载深字、正文与背景、紫色文字的 WCAG 对比度 |
+| `tests/contrast.test.js` | 主色承载白字、薄荷底承载深字、正文与背景、紫色文字的 WCAG 对比度、悬停规则不互相覆盖 |
+| `tests/songs-api.test.js` | 曲库 API 契约：列表筛选与 LIKE 转义、单曲三种定位、鉴权、编号分配与不复用、导入 replace/merge、迁移与种子 SQL 可执行 |
 
 `npm run ui:contrast` 会在无头浏览器里对按钮、标签、按键、徽标等元素逐个计算对比度，
 并报告不达标的项。它抓的是「文字与背景撞色导致看不见」这类静态检查发现不了的问题：

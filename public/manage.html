@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>曲库管理 · SJZ 键盘</title>
+  <!-- 主题引导：必须在样式表之前，避免刷新时闪白 -->
+  <script>
+    (function () {
+      var stored = null;
+      try { stored = localStorage.getItem("zh-hub-theme"); } catch (error) { stored = null; }
+      var mode = stored === "light" || stored === "dark" ? stored : "auto";
+      var dark = mode === "dark" || (mode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    })();
+  </script>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css?v=2" />
+  <style>
+    .manage { max-width: 1100px; margin: 0 auto; padding: 24px 20px 80px; }
+    .manage h1 { font-size: 24px; margin: 0 0 6px; }
+    .manage p.lead { color: var(--muted); margin: 0 0 20px; }
+    .manage-card { border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+    .manage-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .manage-row input, .manage-row select, .manage-row textarea {
+      font: inherit; color: var(--button-ink); background: var(--surface);
+      border: 1px solid var(--border-strong); border-radius: 9px; padding: 8px 12px;
+    }
+    .manage-row input[type="password"] { min-width: 280px; }
+    .manage-status { font-size: 13px; color: var(--muted); }
+    .manage-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .manage-table th, .manage-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .manage-table th { color: var(--muted); font-weight: 700; white-space: nowrap; }
+    .manage-table td.title { font-weight: 700; }
+    .manage-table .score { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-family: ui-monospace, monospace; }
+    .manage-empty { color: var(--muted); padding: 18px 0; }
+    .manage-editor { display: grid; gap: 10px; }
+    .manage-editor label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+    .manage-editor textarea { min-height: 90px; font-family: ui-monospace, monospace; font-size: 12px; }
+    .chip-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--violet); color: var(--on-accent); font-size: 11px; font-weight: 700; }
+    .stage-1 { background: var(--mint); color: #101126; }
+    .stage-3 { background: var(--violet); color: var(--on-accent); }
+  </style>
+</head>
+<body>
+  <main class="manage">
+    <h1>曲库管理</h1>
+    <p class="lead">曲目保存在 Cloudflare D1。这里可以新增、修改、删除曲目，也可以从 JSON 批量导入。</p>
+
+    <section class="manage-card">
+      <div class="manage-row">
+        <input id="token" type="password" placeholder="管理令牌（ADMIN_TOKEN）" autocomplete="off" />
+        <button class="button" id="save-token">记住令牌</button>
+        <button class="button" id="forget-token">清除令牌</button>
+        <button class="button primary" id="load">读取曲库</button>
+        <span class="manage-status" id="status">尚未读取</span>
+      </div>
+    </section>
+
+    <section class="manage-card" id="editor-card" hidden>
+      <h2 style="margin:0 0 10px;font-size:16px" id="editor-title">新增曲目</h2>
+      <div class="manage-editor">
+        <label>曲名<input id="f-title" maxlength="80" /></label>
+        <label>记谱（score）<textarea id="f-score" placeholder="例如：1 1 5 5 6 6 5-"></textarea></label>
+        <div class="manage-row">
+          <label>BPM<input id="f-bpm" type="number" min="20" max="400" value="120" style="width:90px" /></label>
+          <label>测试阶段
+            <select id="f-stage">
+              <option value="1">阶段 1 · 编译通过</option>
+              <option value="2">阶段 2 · 硬件点灯</option>
+              <option value="3">阶段 3 · 游戏实测通过</option>
+            </select>
+          </label>
+          <label>难度<input id="f-difficulty" maxlength="40" /></label>
+          <label>作者<input id="f-author" maxlength="200" /></label>
+          <label><span>已验证</span><input id="f-verified" type="checkbox" checked /></label>
+        </div>
+        <div class="manage-row">
+          <button class="button primary" id="submit-song">保存</button>
+          <button class="button" id="cancel-edit">取消编辑</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="manage-card">
+      <div class="manage-row" style="margin-bottom:12px">
+        <button class="button" id="import-merge">JSON 合并导入</button>
+        <button class="button" id="import-replace">JSON 替换导入</button>
+        <button class="button" id="import-file">导入本地 JSON 文件</button>
+        <input id="import-file-input" type="file" accept=".json,application/json" hidden />
+        <span class="manage-status">合并 = 同编号更新；替换 = 先清空再写入</span>
+      </div>
+      <table class="manage-table">
+        <thead>
+          <tr><th>编号</th><th>曲名</th><th>阶段</th><th>BPM</th><th>记谱</th><th>操作</th></tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="6" class="manage-empty">输入令牌后点「读取曲库」</td></tr></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script type="module">
+    import { getThemeMode, modeIcon, modeName, cycleThemeMode } from "./theme.js";
+
+    const TOKEN_KEY = "sjz-admin-token";
+    const $ = (id) => document.getElementById(id);
+    let songs = [];
+    let editingId = null;
+
+    const token = () => $("token").value.trim();
+    const setStatus = (message, isError = false) => {
+      $("status").textContent = message;
+      $("status").style.color = isError ? "var(--rose, #c0392b)" : "";
+    };
+
+    // 恢复上次的令牌（只存本机 localStorage，服务端仍会再校验一次）
+    try {
+      const saved = localStorage.getItem(TOKEN_KEY);
+      if (saved) { $("token").value = saved; }
+    } catch { /* 隐私模式下忽略 */ }
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: {
+          "content-type": "application/json",
+          ...(token() ? { authorization: `Bearer ${token()}` } : {}),
+          ...(options.headers || {})
+        }
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message || payload?.error || `HTTP ${response.status}`);
+      }
+      return payload;
+    }
+
+    function renderRows() {
+      if (!songs.length) {
+        $("rows").innerHTML = '<tr><td colspan="6" class="manage-empty">曲库为空</td></tr>';
+        return;
+      }
+      $("rows").innerHTML = songs.map((song) => `
+        <tr>
+          <td><span class="chip-badge stage-${song.test_stage}">#${song.music_id}</span></td>
+          <td class="title">${escapeHtml(song.title)}<br><span class="manage-status">${escapeHtml(song.author || "—")}</span></td>
+          <td>${song.test_stage}</td>
+          <td>${song.bpm}</td>
+          <td class="score" title="${escapeHtml(song.score)}">${escapeHtml(song.score)}</td>
+          <td>
+            <button class="button" data-edit="${escapeHtml(song.id)}">编辑</button>
+            <button class="button" data-delete="${escapeHtml(song.id)}">删除</button>
+          </td>
+        </tr>`).join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+    }
+
+    async function load() {
+      setStatus("读取中…");
+      try {
+        const payload = await api("./api/admin/songs");
+        songs = payload.songs || [];
+        renderRows();
+        setStatus(`已载入 ${songs.length} 首，下一个编号 #${payload.next_music_id}`);
+      } catch (error) {
+        setStatus(`读取失败：${error.message}`, true);
+      }
+    }
+
+    function fillEditor(song) {
+      editingId = song?.id || null;
+      $("editor-card").hidden = false;
+      $("editor-title").textContent = song ? `编辑 #${song.music_id} ${song.title}` : "新增曲目";
+      $("f-title").value = song?.title || "";
+      $("f-score").value = song?.score || "";
+      $("f-bpm").value = song?.bpm || 120;
+      $("f-stage").value = String(song?.test_stage || 1);
+      $("f-difficulty").value = song?.difficulty || "";
+      $("f-author").value = song?.author || "";
+      $("f-verified").checked = song ? Boolean(song.verified) : true;
+      $("editor-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    async function submitSong() {
+      const body = {
+        title: $("f-title").value,
+        score: $("f-score").value,
+        bpm: Number($("f-bpm").value),
+        test_stage: Number($("f-stage").value),
+        difficulty: $("f-difficulty").value,
+        author: $("f-author").value,
+        verified: $("f-verified").checked
+      };
+      setStatus(editingId ? "保存中…" : "新增中…");
+      try {
+        if (editingId) {
+          await api(`./api/admin/songs/${encodeURIComponent(editingId)}`, { method: "PATCH", body: JSON.stringify(body) });
+        } else {
+          await api("./api/admin/songs", { method: "POST", body: JSON.stringify(body) });
+        }
+        fillEditor(null);
+        await load();
+      } catch (error) {
+        setStatus(`保存失败：${error.message}`, true);
+      }
+    }
+
+    async function removeSong(id) {
+      const song = songs.find((item) => item.id === id);
+      if (!confirm(`确定删除 #${song?.music_id} ${song?.title}？编号不会被复用。`)) return;
+      setStatus("删除中…");
+      try {
+        await api(`./api/admin/songs/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await load();
+      } catch (error) {
+        setStatus(`删除失败：${error.message}`, true);
+      }
+    }
+
+    async function importSongs(payload, mode) {
+      const list = Array.isArray(payload) ? payload : payload.songs;
+      if (!Array.isArray(list)) { setStatus("JSON 里找不到 songs 数组", true); return; }
+      if (mode === "replace" && !confirm(`替换导入会先清空现有 ${songs.length} 首，确定继续？`)) return;
+      setStatus(`导入中（${list.length} 首，${mode}）…`);
+      try {
+        const result = await api(`./api/admin/songs?mode=${mode}`, {
+          method: "POST",
+          body: JSON.stringify({ songs: list })
+        });
+        await load();
+        setStatus(`${result.message}，当前共 ${result.total} 首`);
+      } catch (error) {
+        setStatus(`导入失败：${error.message}`, true);
+      }
+    }
+
+    // 事件绑定
+    $("save-token").onclick = () => {
+      try { localStorage.setItem(TOKEN_KEY, token()); setStatus("令牌已保存在本机"); }
+      catch { setStatus("无法保存令牌（隐私模式）", true); }
+    };
+    $("forget-token").onclick = () => {
+      try { localStorage.removeItem(TOKEN_KEY); } catch { /* 忽略 */ }
+      $("token").value = "";
+      setStatus("令牌已清除");
+    };
+    $("load").onclick = load;
+    $("submit-song").onclick = submitSong;
+    $("cancel-edit").onclick = () => fillEditor(null);
+    $("import-merge").onclick = () => importSongs(window.__pendingImport || { songs: [] }, "merge");
+    $("import-replace").onclick = () => importSongs(window.__pendingImport || { songs: [] }, "replace");
+    $("import-file").onclick = () => $("import-file-input").click();
+    $("import-file-input").onchange = async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        window.__pendingImport = JSON.parse(await file.text());
+        setStatus(`已载入文件 ${file.name}，请选择「合并导入」或「替换导入」`);
+      } catch (error) {
+        setStatus(`文件不是合法 JSON：${error.message}`, true);
+      }
+      event.target.value = "";
+    };
+    $("rows").onclick = (event) => {
+      const edit = event.target.closest("[data-edit]");
+      if (edit) return fillEditor(songs.find((song) => song.id === edit.dataset.edit));
+      const remove = event.target.closest("[data-delete]");
+      if (remove) return removeSong(remove.dataset.delete);
+    };
+
+    // 浮动主题按钮
+    const toggle = document.createElement("button");
+    toggle.className = "theme-toggle";
+    toggle.type = "button";
+    toggle.addEventListener("click", () => {
+      const mode = cycleThemeMode();
+      toggle.textContent = modeIcon(mode);
+      toggle.title = `主题：${modeName(mode)}`;
+    });
+    toggle.textContent = modeIcon(getThemeMode());
+    toggle.title = `主题：${modeName(getThemeMode())}`;
+    document.body.appendChild(toggle);
+  </script>
+</body>
+</html>

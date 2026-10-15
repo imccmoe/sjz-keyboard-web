@@ -1018,12 +1018,40 @@ async function performFirmwareUpload(bootloader) {
   reportAppConnection("固件升级完成");
 }
 
+/**
+ * 读取曲库。优先走 D1 API，取不到时回退到随站点发布的 JSON 快照 ——
+ * 这样离线、或 API 未部署（例如只跑静态服务器）时页面仍然可用。
+ */
 async function loadCatalog(reload = false) {
+  const stamp = reload ? `?t=${Date.now()}` : "";
+  let payload = null;
+  let source = "";
+
   try {
-    const response = await fetch(`./data/music-catalog.json${reload ? `?t=${Date.now()}` : ""}`, { cache: "no-store" });
+    const response = await fetch(`./api/songs${stamp}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    state.songs = (payload.songs || [])
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.message || data.error || "接口返回失败");
+    payload = data;
+    source = "D1";
+  } catch (apiError) {
+    try {
+      const response = await fetch(`./data/music-catalog.json${stamp}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      payload = await response.json();
+      source = "本地 JSON 快照";
+    } catch {
+      state.songs = [];
+      render();
+      showToast(`曲库读取失败：API（${apiError.message}）与本地快照都不可用`, "error");
+      return;
+    }
+  }
+
+  try {
+    const songs = Array.isArray(payload) ? payload : payload.songs || [];
+    state.catalogSource = source;
+    state.songs = songs
       .filter((song) => song.verified)
       .map((song, catalogIndex) => ({
         ...song,
@@ -1034,11 +1062,11 @@ async function loadCatalog(reload = false) {
       .sort((left, right) => left.test_stage - right.test_stage || left.catalogIndex - right.catalogIndex);
     state.selectedSongId = state.songs.some((song) => song.id === state.selectedSongId) ? state.selectedSongId : state.songs[0]?.id || null;
     render();
-    if (reload) showToast(`音乐库已重新加载，共 ${state.songs.length} 首`);
+    if (reload) showToast(`曲库已重新加载，共 ${state.songs.length} 首（来源：${source}）`);
   } catch (error) {
     state.songs = [];
     render();
-    showToast(`音乐库读取失败：${error.message}`, "error");
+    showToast(`曲库解析失败：${error.message}`, "error");
   }
 }
 
