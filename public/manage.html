@@ -100,14 +100,11 @@
     </section>
   </main>
 
-  <div class="theme-switch" role="group" aria-label="主题">
-    <button class="theme-segment" data-theme-choice="auto" type="button" title="跟随系统" aria-label="跟随系统">🌗</button>
-    <button class="theme-segment" data-theme-choice="light" type="button" title="白天" aria-label="白天">☀️</button>
-    <button class="theme-segment" data-theme-choice="dark" type="button" title="夜晚" aria-label="夜晚">🌙</button>
-  </div>
+  <button class="theme-toggle" data-action="toggle-theme" type="button"
+    aria-label="切换主题" title="切换主题">🌗</button>
 
   <script type="module">
-    import { getThemeMode, setThemeMode } from "./theme.js";
+    import { getThemeMode, modeIcon, modeName, setThemeMode, toggleLightDark, watchSystemTheme } from "./theme.js";
 
     const TOKEN_KEY = "sjz-admin-token";
     const $ = (id) => document.getElementById(id);
@@ -279,21 +276,36 @@
       if (remove) return removeSong(remove.dataset.delete);
     };
 
-    // 右下角三段式主题控件：一次点击直达目标模式，不弹提示。
-    // 属性名用 data-theme-choice，避开 <html> 上的 data-theme-mode。
+    // 右下角单图标主题按钮：点击在白天 / 夜晚之间切换，长按回到跟随系统，不弹提示。
+    const themeButton = document.querySelector('[data-action="toggle-theme"]');
     function syncTheme() {
-      const current = getThemeMode();
-      document.querySelectorAll("[data-theme-choice]").forEach((segment) => {
-        const active = segment.dataset.themeChoice === current;
-        segment.setAttribute("aria-pressed", active ? "true" : "false");
-      });
+      const mode = getThemeMode();
+      themeButton.textContent = modeIcon(mode);
+      themeButton.title = `主题：${modeName(mode)}（点击切换白天 / 夜晚，长按跟随系统）`;
+      themeButton.setAttribute("aria-label", `切换主题，当前${modeName(mode)}`);
+      // auto 用虚线边框区分；测试与管理页都依赖这个标记判断当前模式
+      themeButton.dataset.themePress = mode;
     }
-    document.querySelector(".theme-switch").addEventListener("click", (event) => {
-      const segment = event.target.closest("[data-theme-choice]");
-      if (!segment) return;
-      setThemeMode(segment.dataset.themeChoice);
+    let holdTimer = null;
+    let longPressed = false;
+    themeButton.addEventListener("pointerdown", () => {
+      longPressed = false;
+      holdTimer = window.setTimeout(() => {
+        longPressed = true;
+        setThemeMode("auto");
+        syncTheme();
+      }, 600);
+    });
+    for (const type of ["pointerup", "pointerleave", "pointercancel"]) {
+      themeButton.addEventListener(type, () => window.clearTimeout(holdTimer));
+    }
+    themeButton.addEventListener("click", () => {
+      if (longPressed) { longPressed = false; return; }
+      toggleLightDark();
       syncTheme();
     });
+    // auto 模式下系统主题变化时，图标也要跟着变
+    watchSystemTheme(() => syncTheme());
     syncTheme();
   </script>
 </body>

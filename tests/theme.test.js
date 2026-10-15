@@ -86,46 +86,66 @@ test("theme.js 的三档模式与持久化键与引导脚本一致", () => {
   assert.equal(bootstrapKey, "zh-hub-theme");
 });
 
-test("主题切换只有一条触发路径，避免重复绑定导致跳过模式", () => {
-  // 回归：曾经既在 [data-action] 分发里处理 toggle-theme，又额外给按钮绑了一次
-  // switchTheme，一次点击触发两次，auto 直接跳过 light 跳到 dark。
+test("主题切换只有一条触发路径，避免重复绑定导致切换两次", () => {
+  // 回归（真实踩过）：bindEvents() 会在初始化和 render() 后各执行一次，
+  // 于是 [data-action] 按钮上挂了两个监听器、handleAction 执行两次。
+  // 主题「切了两次又切回去」，表现为点了没反应。
+  // 现在统一用一条委托监听，并用一次性标志保证只挂一次。
   const app = read("public/app.js");
-  const directBindings = [...app.matchAll(/addEventListener\("click",\s*switchTheme\)/g)];
-  assert.equal(directBindings.length, 0, "不应再直接给主题控件绑定 switchTheme");
-  // 三段式控件统一走 .theme-switch 上的委托监听
-  assert.match(app, /querySelector\("\.theme-switch"\)\?\.addEventListener\("click"/,
-    "缺少 .theme-switch 的委托监听");
-  assert.match(app, /switchTheme\(segment\.dataset\.themeChoice\)/,
-    "点击某一段应直接切到该模式，而不是循环");
+  const perElement = [...app.matchAll(/querySelectorAll\("\[data-action\]"\)\.forEach\([\s\S]{0,80}?addEventListener\("click"/g)];
+  assert.equal(perElement.length, 0, "不应再逐个 [data-action] 元素绑定 click");
+
+  assert.match(app, /closest\("\[data-action\]"\)/,
+    "缺少 [data-action] 的委托监听");
+  // 断言要匹配真正的代码，不能只匹配到注释
+  assert.match(app, /if \(!document\.documentElement\.dataset\.actionDelegateBound\)\s*\{/,
+    "委托监听必须用一次性标志防止重复挂载");
+  assert.match(app, /dataset\.themeHoldBound/, "长按绑定也必须有一次性标志");
+
+  // 主题按钮本身不能再有独立的 click 切换路径
+  const direct = [...app.matchAll(/addEventListener\("click",\s*switchTheme\)|toggleLightDark\(\);\s*\n\s*syncThemeButton\(\);/g)];
+  assert.equal(direct.length, 0, "主题按钮不应有独立的 click 切换路径（会与委托叠加成两次）");
+  assert.match(app, /if \(action === "toggle-theme"\) return switchTheme\(\);/,
+    "handleAction 必须处理 toggle-theme");
 });
 
-test("主题控件是静态三段式，一次点击直达任一模式", () => {
+test("主题按钮是静态单图标，点击在白天 / 夜晚间切换，长按跟随系统", () => {
   // 放在 index.html 而不是渲染函数里：浮动元素若每次重渲染都重建会闪动、丢焦点。
-  // 用三段而不是单按钮循环：从白天到夜晚只需点一次（用户要求「要可以快速的切换」）。
+  // 用户要求「有一个图标就行了，不要有三个」+「放到右下角」。
   const html = read("public/index.html");
-  const segments = [...html.matchAll(/data-theme-choice="(auto|light|dark)"/g)].map((m) => m[1]);
-  assert.deepEqual(segments, ["auto", "light", "dark"],
-    `index.html 应有 auto/light/dark 三段，实际 ${JSON.stringify(segments)}`);
-  assert.match(html, /class="theme-switch"/, "三段应包在 .theme-switch 容器里");
-  // 回归：曾经用 data-theme-mode 作为按钮属性，与 <html data-theme-mode> 撞名，
-  // 导致 querySelectorAll 多选出 <html>、选中态判断错乱。
-  assert.ok(!/data-theme-mode=/.test(html),
-    "按钮不能用 data-theme-mode，该属性已被 <html> 占用");
+  const buttons = [...html.matchAll(/<button[^>]*data-action="toggle-theme"/g)];
+  assert.equal(buttons.length, 1, `index.html 应只有一个主题按钮，实际 ${buttons.length}`);
+  assert.match(html, /class="theme-toggle"/, "主题按钮应带 .theme-toggle 类名");
+  assert.ok(!/theme-segment|theme-switch|data-theme-choice/.test(html),
+    "不应再残留三段式控件的结构");
 
   const app = read("public/app.js");
-  const rendered = [...app.matchAll(/data-theme-choice=/g)];
-  assert.equal(rendered.length, 0, "渲染函数里不应再生成主题控件");
-  assert.match(app, /function syncThemeButton/, "缺少同步选中态的函数");
-  assert.match(app, /syncThemeButton\(\)/, "启动时应调用 syncThemeButton 初始化选中态");
-  assert.match(app, /aria-pressed/, "选中态应写到 aria-pressed，便于无障碍与测试");
+  const rendered = [...app.matchAll(/<button[^>]*data-action="toggle-theme"/g)];
+  assert.equal(rendered.length, 0, "渲染函数里不应再生成主题按钮");
+  assert.match(app, /function syncThemeButton/, "缺少同步图标的函数");
+  assert.match(app, /syncThemeButton\(\)/, "启动时应调用 syncThemeButton 初始化图标");
+  // 单击直达目标模式；长按 600ms 回到跟随系统
+  assert.match(app, /toggleLightDark\(\)/, "单击应调用 toggleLightDark");
+  assert.match(app, /setTimeout\([\s\S]*?600\)/, "长按应使用 600ms 定时器");
+  assert.match(app, /setThemeMode\("auto"\)/, "长按应回到跟随系统");
 
-  // 浮动样式应定义在样式表里
   const styles = read("public/styles.css");
-  const switchRule = /\.theme-switch\s*\{([^}]*)\}/.exec(styles);
-  assert.ok(switchRule, "styles.css 缺少 .theme-switch 规则");
-  assert.match(switchRule[1], /position:\s*fixed/, "主题控件应为固定定位的浮动控件");
-  assert.match(switchRule[1], /right:|bottom:/, "主题控件应贴在窗口角落");
-  assert.match(styles, /\.theme-segment\[aria-pressed="true"\]/, "缺少选中段的样式");
+  const toggleRule = /\.theme-toggle\s*\{([^}]*)\}/.exec(styles);
+  assert.ok(toggleRule, "styles.css 缺少 .theme-toggle 规则");
+  assert.match(toggleRule[1], /position:\s*fixed/, "主题按钮应为固定定位的浮动按钮");
+  assert.match(toggleRule[1], /right:\s*\d+px/, "按钮应贴在窗口右侧（用户要求右下角）");
+  assert.match(toggleRule[1], /bottom:\s*\d+px/, "按钮应贴在窗口底部");
+  assert.ok(!/\.theme-segment/.test(styles), "不应再残留三段式样式");
+});
+
+test("theme.js 提供「白天 / 夜晚」直达切换", () => {
+  const theme = read("public/theme.js");
+  const body = functionBody(theme, "toggleLightDark");
+  assert.ok(body, "缺少 toggleLightDark");
+  // 应基于已解析主题反向切换，而不是走 auto→light→dark 循环
+  assert.match(body, /resolvedTheme\(\)/, "应基于当前解析出的主题判断");
+  assert.match(body, /setThemeMode\(/, "应调用 setThemeMode");
+  assert.ok(!/cycleThemeMode/.test(body), "不应退化成循环切换");
 });
 
 test("切换主题不弹提示（用户反馈不要「主题：白天」这类提示）", () => {

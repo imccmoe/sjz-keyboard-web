@@ -79,14 +79,12 @@ async function main() {
   await client.send("Page.navigate", { url: `${BASE}/?layout=${Date.now()}` });
   await sleep(4000);
 
-  console.log("\n[主题浮动控件]");
+  console.log("\n[主题浮动按钮]");
   const toggle = await evaluate(`(() => {
-    const node = document.querySelector('.theme-switch');
+    const node = document.querySelector('.theme-toggle');
     if (!node) return { error: 'missing' };
     const rect = node.getBoundingClientRect();
     const style = getComputedStyle(node);
-    const segments = [...node.querySelectorAll('[data-theme-choice]')];
-    const active = segments.filter((s) => s.getAttribute('aria-pressed') === 'true');
     return {
       position: style.position,
       right: Math.round(window.innerWidth - rect.right),
@@ -94,10 +92,7 @@ async function main() {
       bottom: Math.round(window.innerHeight - rect.bottom),
       width: Math.round(rect.width),
       height: Math.round(rect.height),
-      segments: segments.length,
-      modes: segments.map((s) => s.dataset.themeChoice),
-      activeCount: active.length,
-      activeMode: active[0]?.dataset.themeChoice || null,
+      icon: node.textContent.trim(),
       inTopbar: Boolean(node.closest('.topbar')),
       // 是否真的挡住了可交互元素：用 elementFromPoint 实测，而不是矩形相交 ——
       // 矩形相交会把「仅横向重叠、纵向错开」误判成遮挡。
@@ -120,20 +115,15 @@ async function main() {
       })()
     };
   })()`);
-  check("存在主题控件", !toggle?.error, JSON.stringify(toggle));
+  check("存在主题按钮", !toggle?.error, JSON.stringify(toggle));
   check("已脱离顶部栏", toggle?.inTopbar === false, JSON.stringify(toggle));
-  check("固定定位贴在窗口角落（左或右，距边 < 40px）",
-    toggle?.position === "fixed" && toggle?.bottom < 40
-    && ((toggle?.left ?? 999) < 40 || (toggle?.right ?? 999) < 40),
-    `position=${toggle?.position} left=${toggle?.left} right=${toggle?.right} bottom=${toggle?.bottom}`);
-  check("三段式，且恰有一段选中",
-    toggle?.segments === 3 && toggle?.activeCount === 1,
-    `段数 ${toggle?.segments} 选中 ${toggle?.activeCount}`);
-  check("三段顺序为 跟随系统 / 白天 / 夜晚",
-    JSON.stringify(toggle?.modes) === JSON.stringify(["auto", "light", "dark"]),
-    JSON.stringify(toggle?.modes));
-  check("控件紧凑（高 <= 48px）", (toggle?.height || 99) <= 48, `高 ${toggle?.height}px 宽 ${toggle?.width}px`);
-  check("浮动控件不遮挡任何可交互元素",
+  check("固定定位在右下角",
+    toggle?.position === "fixed" && (toggle?.right ?? 999) < 40 && (toggle?.bottom ?? 999) < 40,
+    `position=${toggle?.position} right=${toggle?.right} bottom=${toggle?.bottom}`);
+  check("只有一个图标按钮（非三段式）",
+    (toggle?.width ?? 99) <= 52 && (toggle?.height ?? 99) <= 52,
+    `${toggle?.width}x${toggle?.height}`);
+  check("浮动按钮不遮挡任何可交互元素",
     (toggle?.coveredElements?.length ?? 1) === 0,
     `压在：${JSON.stringify(toggle?.coveredElements)}`);
 

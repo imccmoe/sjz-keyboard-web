@@ -89,6 +89,17 @@ export function cycleThemeMode() {
   return setThemeMode(THEME_MODES[(index + 1) % THEME_MODES.length]);
 }
 
+/**
+ * 直接在白天 / 夜晚之间切换（不经过「跟随系统」）。
+ * 单图标按钮用这个：一次点击就到目标，不用按两次；
+ * 想回到跟随系统用长按或 Ctrl+Shift+L。
+ * 当前是 auto 时，按「与系统相反」的方向切。
+ */
+export function toggleLightDark() {
+  const current = resolvedTheme();
+  return setThemeMode(current === "dark" ? "light" : "dark");
+}
+
 /** auto 模式下跟随系统切换。返回取消订阅函数（测试用）。 */
 export function watchSystemTheme(onChange) {
   let media;

@@ -97,26 +97,26 @@ async function main() {
 
   console.log("\n[主题切换耗时]");
   const timings = await evaluate(`(async () => {
-    // 选段用 data-theme-choice：data-theme-mode 已被 <html> 占用
-    const segments = [...document.querySelectorAll('.theme-switch [data-theme-choice]')];
-    const single = document.querySelector('[data-action="toggle-theme"]');
-    const targets = segments.length ? segments : (single ? [single] : []);
-    if (!targets.length) return { error: 'missing' };
+    const button = document.querySelector('[data-action="toggle-theme"]');
+    if (!button) return { error: 'missing' };
+    // 单击 → 应直接切到相反主题；再单击 → 切回
     const samples = [];
-    for (const button of targets) {
+    const themes = [];
+    for (let i = 0; i < 3; i++) {
+      const before = document.documentElement.dataset.theme;
       const start = performance.now();
       button.click();
-      // 等一帧，确认样式已经应用
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       samples.push(Math.round((performance.now() - start) * 100) / 100);
+      themes.push({ before, after: document.documentElement.dataset.theme });
     }
     return {
       samples,
       worst: Math.max(...samples),
-      segments: segments.length,
+      themes,
       theme: document.documentElement.dataset.theme,
       mode: document.documentElement.dataset.themeMode,
-      active: document.querySelectorAll('.theme-switch [data-theme-choice][aria-pressed="true"]').length,
+      icon: button.textContent.trim(),
       toasts: window.__toasts ? window.__toasts.slice() : null
     };
   })()`);
@@ -128,14 +128,12 @@ async function main() {
     check("单次切换在一帧内完成（< 50ms）", timings.worst < 50, `最慢 ${timings.worst}ms`);
     check("切换过程不弹任何提示", (timings.toasts?.length ?? -1) === 0,
       `捕获到：${JSON.stringify(timings.toasts)}`);
-    check("模式与解析主题都已更新",
-      ["light", "dark"].includes(timings.theme) && ["auto", "light", "dark"].includes(timings.mode),
-      `data-theme=${timings.theme} data-theme-mode=${timings.mode}`);
-    if (timings.segments) {
-      check("三段式控件：一次点击直达任一模式",
-        timings.segments === 3 && timings.active === 1,
-        `段数 ${timings.segments}，选中 ${timings.active}`);
-    }
+    // 单击必须直达相反主题，不能出现「点了没变」或「跳过中间态」
+    const toggles = (timings.themes || []).every((t) => t.before && t.after && t.before !== t.after);
+    check("每次单击都直达相反主题", toggles, JSON.stringify(timings.themes));
+    check("图标与模式同步更新",
+      ["☀️", "🌙", "🌗"].includes(timings.icon) && ["auto", "light", "dark"].includes(timings.mode),
+      `icon=${timings.icon} mode=${timings.mode}`);
   }
 
   client.close?.();

@@ -2,7 +2,7 @@ import { compileSong, formatDuration, startPreview, stopPreview } from "./music-
 import { BOOT_PID, inspectUpgradeDevices, MusicHidDevice, requestBootloader, uploadFirmware, waitForAppReenumeration, webHidSupported } from "./device.js";
 import { decryptFirmware } from "./firmware.js";
 import { KEY_USAGES, spinCounts } from "./device-config.js";
-import { cycleThemeMode, getThemeMode, modeName, setThemeMode, THEME_MODES, watchSystemTheme } from "./theme.js";
+import { cycleThemeMode, getThemeMode, modeName, setThemeMode, THEME_MODES, toggleLightDark, watchSystemTheme } from "./theme.js";
 
 const APP_VERSION = "1.15";
 const TEST_STAGE_LABELS = {
@@ -389,14 +389,9 @@ function renderAbout() {
 }
 
 function bindEvents() {
-  // 右下角三段式主题控件：一次点击直达目标模式（不循环、不弹提示）。
-  // 该控件在静态 HTML 里，不随 render() 重建，所以在这里绑定一次即可。
-  // 注意属性名是 data-theme-choice，不能叫 data-theme-mode ——
-  // 后者已经被 <html> 占用（theme.js 会写 root.dataset.themeMode），会互相干扰。
-  document.querySelector(".theme-switch")?.addEventListener("click", (event) => {
-    const segment = event.target.closest("[data-theme-choice]");
-    if (segment) switchTheme(segment.dataset.themeChoice);
-  });
+  // 右下角单图标主题按钮：单击切换白天 / 夜晚，长按跟随系统（不循环、不弹提示）。
+  // 该按钮在静态 HTML 里，不随 render() 重建，所以只需绑定一次。
+  bindThemeButton();
   document.querySelector("#device-select")?.addEventListener("change", (event) => {
     state.selectedDeviceIndex = Number(event.target.value);
   });
@@ -504,9 +499,20 @@ function bindEvents() {
   }));
   document.querySelector("#key-capture")?.addEventListener("keydown", captureKey);
   document.querySelector("#firmware-input")?.addEventListener("change", readFirmware);
-  document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => handleAction(button)));
-  // 注意：主题按钮统一走上面的 [data-action] 分发（handleAction 里有 toggle-theme 分支）。
-  // 曾经在这里又额外绑了一次 switchTheme，导致一次点击触发两次、跳过中间模式。
+  // [data-action] 统一用**一条**委托监听处理。
+  //
+  // 这里必须用委托、不能给每个元素单独绑：bindEvents() 会在初始化和 render() 后各执行一次，
+  // 逐元素绑定会让每个按钮挂上两个监听器，handleAction 执行两次 ——
+  // 主题切换因此「切了两次又切回去」，表现为点了没反应；
+  // 其它带副作用的动作（保存、连接、固件升级）同样会被重复触发。
+  // 用委托 + 一次性标志，无论 bindEvents() 被调用几次都只有一条路径。
+  if (!document.documentElement.dataset.actionDelegateBound) {
+    document.documentElement.dataset.actionDelegateBound = "1";
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action]");
+      if (button && !button.disabled) handleAction(button);
+    });
+  }
   document.addEventListener("keydown", (event) => {
     if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return;
     if (event.key !== "L" && event.key !== "l") return;
@@ -518,26 +524,69 @@ function bindEvents() {
 /**
  * 切换主题。
  *
+ * 单击在白天 / 夜晚之间直达切换（不经过 auto，也不必按两次）；
+ * 长按 600ms 由 bindThemeButton 处理为「跟随系统」。
+ *
  * 这里**不能**调用 render()：那会重建页面节点，
  * 把「按键捕获」输入框里正在录制的按键状态清空。
  *
  * 不弹 toast —— 用户反馈「切换完不要出现主题：白天之类的」。
- * 模式已经由控件上的选中态直观体现，再弹提示只是噪音。
+ * 模式由按钮图标体现，再弹提示只是噪音。
  *
- * @param {string} [mode] 指定模式；不传则按 auto → light → dark 循环
+ * 注意：单击只能有**一条**触发路径。曾经这里和 [data-action] 委托各触发一次，
+ * 两次切换互相抵消，表现为「点了没反应」。
+ *
+ * @param {string} [mode] 指定模式；不传则在白天 / 夜晚之间切换
  */
 function switchTheme(mode) {
-  const next = THEME_MODES.includes(mode) ? setThemeMode(mode) : cycleThemeMode();
-  syncThemeButton(next);
+  if (mode === "cycle") {
+    syncThemeButton(cycleThemeMode());
+    return;
+  }
+  if (THEME_MODES.includes(mode)) {
+    syncThemeButton(setThemeMode(mode));
+    return;
+  }
+  syncThemeButton(toggleLightDark());
 }
 
-/** 把当前模式同步到右下角三段控件的选中态。 */
+/** 把当前模式同步到右下角单图标按钮。 */
 function syncThemeButton(mode = getThemeMode()) {
-  document.querySelectorAll("[data-theme-choice]").forEach((segment) => {
-    const active = segment.dataset.themeChoice === mode;
-    segment.setAttribute("aria-pressed", active ? "true" : "false");
-    segment.title = `${modeName(segment.dataset.themeChoice)}${active ? "（当前）" : ""}`;
+  document.querySelectorAll('[data-action="toggle-theme"]').forEach((button) => {
+    button.textContent = mode === "auto" ? "🌗" : mode === "dark" ? "🌙" : "☀️";
+    button.title = `主题：${modeName(mode)}（点击切换白天 / 夜晚，长按跟随系统）`;
+    button.setAttribute("aria-label", `切换主题，当前${modeName(mode)}`);
+    // auto 用虚线边框区分，便于测试与样式
+    button.dataset.themePress = mode;
   });
+}
+
+/**
+ * 给主题按钮装上「长按回到跟随系统」。
+ *
+ * 单击**不在这里处理** —— 由 [data-action] 委托统一走 handleAction 的 toggle-theme 分支。
+ * 曾经这里也绑了一次 click，而 bindEvents() 会被调用两次（初始化 + render()），
+ * 于是按钮上同时存在两条切换路径，一次点击切换两次、互相抵消，
+ * 表现为「点了没反应」。
+ */
+function bindThemeButton() {
+  const button = document.querySelector('[data-action="toggle-theme"]');
+  if (!button || button.dataset.themeHoldBound) return;
+  button.dataset.themeHoldBound = "1";
+  let holdTimer = null;
+  // 长按标记放在元素上，供 handleAction 读取（跨次绑定也能共享）
+  button.dataset.themeLongPressed = "";
+  button.addEventListener("pointerdown", () => {
+    button.dataset.themeLongPressed = "";
+    holdTimer = window.setTimeout(() => {
+      button.dataset.themeLongPressed = "1";
+      setThemeMode("auto");
+      syncThemeButton();
+    }, 600);
+  });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) {
+    button.addEventListener(type, () => window.clearTimeout(holdTimer));
+  }
 }
 
 function captureKey(event) {
@@ -569,6 +618,11 @@ function markLedDirty() {
 
 function handleAction(button) {
   const action = button.dataset.action;
+  // 长按主题按钮会先切到「跟随系统」，松手后的这次 click 不该再切换
+  if (action === "toggle-theme" && button.dataset.themeLongPressed === "1") {
+    button.dataset.themeLongPressed = "";
+    return;
+  }
   if (action === "preview-song") return previewSong(button.dataset.songId);
   if (action === "save-slot") return saveSlot(Number(button.dataset.slot));
   if (action === "scan-device") return scanDevices();
@@ -586,8 +640,7 @@ function handleAction(button) {
   if (action === "start-update") return startFirmwareUpdate();
   if (action === "continue-update") return continueFirmwareUpdate();
   if (action === "complete-update") return completeFirmwareUpdate();
-  if (action === "toggle-theme") return switchTheme();
-}
+  if (action === "toggle-theme") return switchTheme();}
 
 function assignSong(slot, songId) {
   if (!state.songs.some((song) => song.id === songId)) return;
