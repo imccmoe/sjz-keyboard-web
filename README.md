@@ -80,40 +80,91 @@ ADMIN_TOKEN=local-dev-token
 
 ### 前置条件
 
-- Node 18+，`npx wrangler` 可用（`npm install` 装的 devDependency 就是它）
+- Node 18+，先 `npm install`（`npx wrangler` 用的就是项目里这个 devDependency；
+  全局装过 wrangler 也建议以项目内的为准）
 - 一个 Cloudflare 账号，并登录：`npx wrangler login`
-  （CI 里改用环境变量 `CLOUDFLARE_API_TOKEN`，权限需含 Pages:Edit 与 D1:Edit）
-- `wrangler.toml` 里的 `database_id` 还是占位符，第一步会替换掉
+  （CI / 无交互环境改用环境变量 `CLOUDFLARE_API_TOKEN`，权限需含 Pages:Edit 与 D1:Edit）
 
 ### 首次部署
 
+下面 7 步有先后依赖，**不要跳步**，尤其第 2 步。
+
+**1. 建 D1 库**
+
 ```powershell
-# 1. 建 D1 库，把输出里的 database_id 填进 wrangler.toml
 npx wrangler d1 create sjz-keyboard-web
-
-# 2. 远程建表（songs / song_counters）
-npx wrangler d1 migrations apply sjz-keyboard-web --remote
-
-# 3. 导入初始曲库（25 首；seeds/songs.sql 是曲库唯一的数据快照）
-npx wrangler d1 execute sjz-keyboard-web --remote --file seeds/songs.sql
-
-# 4. 设置管理令牌（不设的话 /api/admin/* 一律 503）
-npx wrangler pages secret put ADMIN_TOKEN --project-name sjz-keyboard-web
-
-# 5. 部署（输出目录取自 wrangler.toml 的 pages_build_output_dir）
-npx wrangler pages deploy --project-name sjz-keyboard-web
 ```
 
-第一次 `pages deploy` 时若项目还不存在，wrangler 会提示创建；也可以先显式建好：
+输出里会给出配置片段，其中有 `database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"`。
+
+**2. 把这个 UUID 填进 `wrangler.toml`（最容易漏、漏了必报错的一步）**
+
+文件里现在是占位符：
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "sjz-keyboard-web"
+database_id = "replace-with-your-d1-id"   # ← 换成第 1 步输出的 UUID
+```
+
+> ⚠️ **`wrangler d1 create` 不会自动改这个文件** —— 它的说明就是"provides the binding and UUID
+> that you will put in your config file"，UUID 必须手动粘贴进去。
+>
+> 而且 **`wrangler.toml` 是 Pages 项目的 source of truth**：部署时按它写绑定，控制台里对应字段是
+> **只读**的。所以留着占位符部署一定失败（报 D1 数据库无效 / 找不到之类），
+> 事后也**没法只在控制台改** —— 只能改这个文件再重新部署。
+
+填完自查：
+
+```powershell
+Select-String -Path wrangler.toml -Pattern 'database_id'
+# 输出里不应再出现 replace-with-your-d1-id
+```
+
+> `database_id` 不是密钥，建议直接把这一行提交进仓库；用 Git 集成自动部署时，
+> 仓库里的值就是部署时用的值。
+
+> 本地开发不受这一步影响：`--local` 用的是本地模拟库，占位符不影响
+> `wrangler pages dev` 与 `d1 ... --local`；只有 `--remote` 命令和 `pages deploy` 需要真 UUID。
+
+**3. 远程建表（songs / song_counters）**
+
+```powershell
+npx wrangler d1 migrations apply sjz-keyboard-web --remote
+```
+
+**4. 导入初始曲库（25 首）**
+
+```powershell
+npx wrangler d1 execute sjz-keyboard-web --remote --file seeds/songs.sql
+```
+
+**5. 创建 Pages 项目**
 
 ```powershell
 npx wrangler pages project create sjz-keyboard-web --production-branch main
 ```
 
-**D1 绑定**：`wrangler.toml` 里声明了 `[[d1_databases]] binding = "DB"`，部署时会带上。
-若线上 `/api/songs` 返回 `503 {"error":"db_unbound"}`，说明项目没绑上这个库 ——
-到 Pages 项目 → Settings → Functions → D1 database bindings 里添加变量名 `DB` 指向该库，
-然后重新部署一次。
+第 6 步的 `pages secret put` 要求项目已存在，所以要先把项目建好。
+（首次 `pages deploy` 也会隐式创建项目，但那会让设令牌排在部署之后 —— 见下一步的说明。）
+
+**6. 设置管理令牌**
+
+```powershell
+npx wrangler pages secret put ADMIN_TOKEN --project-name sjz-keyboard-web
+```
+
+> 必须在**部署之前**设置：secrets 与绑定只对设置之后的部署生效。
+> 先部署再设令牌的话，线上仍是 503 `admin_token_missing`，得再部署一次才生效。
+
+**7. 部署**
+
+```powershell
+npx wrangler pages deploy
+```
+
+输出目录取自 `wrangler.toml` 的 `pages_build_output_dir = "public"`，不用额外传目录参数。
 
 ### 部署后验证
 
@@ -136,19 +187,23 @@ curl.exe https://sjz-keyboard-web.pages.dev/api/songs/1
 | 前端代码 / 样式 / 固件包 | `npx wrangler pages deploy` 重新部署 |
 | 曲库内容 | 打开 `/manage.html` 增删改，**立即生效，不用重新部署** |
 | 表结构 | 新增 `migrations/000N_*.sql`，再 `npx wrangler d1 migrations apply sjz-keyboard-web --remote` |
-| 管理令牌 | `npx wrangler pages secret put ADMIN_TOKEN --project-name sjz-keyboard-web` |
+| 管理令牌 | `npx wrangler pages secret put ADMIN_TOKEN --project-name sjz-keyboard-web`，然后重新部署 |
+| 换绑数据库 | 改 `wrangler.toml` 里的 `database_id`，再 `npx wrangler pages deploy`（控制台改不了） |
 | 导出线上曲库 | `npx wrangler d1 export sjz-keyboard-web --remote --output backup.sql` |
 
 ### 常见问题
 
 | 现象 | 原因 / 处理 |
 | --- | --- |
-| 页面能开，曲库提示「读取失败」 | 当纯静态站部署了，或 Functions 没传上去；确认 `/api/songs` 可用 |
-| `/api/songs` 返回 503 `db_unbound` | Pages 项目没绑定 D1，见上面「D1 绑定」 |
-| `/api/admin/*` 返回 503 `admin_token_missing` | 没设 `ADMIN_TOKEN` 环境变量 |
+| **部署报错**，提到 D1 / database_id / UUID / 找不到数据库 | `wrangler.toml` 里还是占位符 `replace-with-your-d1-id`。换成第 1 步输出的 UUID 再部署（见首次部署第 2 步） |
+| `/api/songs` 返回 503 `db_unbound` | 绑定没生效：确认 `wrangler.toml` 里 `binding = "DB"` 与 `database_id` 都正确，然后**重新部署**（用配置文件时控制台里这些字段是只读的，去控制台改没用） |
+| `/api/admin/*` 返回 503 `admin_token_missing` | 没设 `ADMIN_TOKEN`，或设完没有重新部署（secrets 只对设置之后的部署生效） |
+| `pages secret put` 报找不到项目 | 先执行首次部署第 5 步创建 Pages 项目 |
 | `/api/admin/*` 返回 401 | 令牌不对，格式是 `Authorization: Bearer <token>` |
+| 页面能开，曲库提示「读取失败」 | 当纯静态站部署了，或 Functions 没传上去；确认 `/api/songs` 可用 |
 | 页面上没有「连接」按钮 | 不是安全上下文：必须 HTTPS（本地 localhost 例外） |
-| 曲库是空的 | 没导入种子，见首次部署第 3 步 |
+| 曲库是空的 | 没导入种子，见首次部署第 4 步 |
+| 忘了 database_id | `npx wrangler d1 list`，或 `npx wrangler d1 info sjz-keyboard-web` |
 
 ## 连接与固件升级
 
