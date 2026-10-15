@@ -87,3 +87,32 @@ test("页面不引用其他站点或配装方案资源", () => {
   }
   assert.ok(!fs.existsSync(path.join(ROOT, "public/data/schemes.json")), "不应携带配装方案数据");
 });
+
+test("强调色面上的文字使用前景色变量，而不是被当作背景色的 --surface", () => {
+  // 回归：主题化时把 #fff 统一换成了 var(--surface)，但 --surface 是面板背景色
+  // （暗色下 #171a2b）。用在紫色按钮/徽标上会让文字几乎看不见 —— 表现为
+  // 「鼠标放到连接按钮上就变成白色/看不见」。
+  const css = read("public/styles.css");
+  const accentBackgrounds = /background:\s*var\(--(violet|mint|key-pressed-bg|space-[a-z-]+|keycap-bg|toast-bg)\)/;
+
+  for (const block of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const [, selectors, body] = block;
+    if (!accentBackgrounds.test(body)) continue;
+    assert.ok(!/color:\s*var\(--surface\)/.test(body),
+      `${selectors.trim()} 在强调/深色背景上把 --surface 当文字色用，应改用 --on-accent / --on-space / --keycap-ink`);
+  }
+});
+
+test("前景色变量在亮暗两套主题里都不指向背景色", () => {
+  const css = read("public/styles.css");
+  for (const marker of [':root[data-theme="light"]', ':root[data-theme="dark"]']) {
+    const start = css.indexOf(marker);
+    const block = css.slice(start, css.indexOf("}", start));
+    for (const name of ["--on-accent", "--on-space", "--keycap-ink", "--keycap-on", "--toast-ink"]) {
+      const value = new RegExp(`${name}:\\s*([^;]+);`).exec(block)?.[1]?.trim();
+      assert.ok(value, `${marker} 缺少 ${name}`);
+      assert.ok(!value.startsWith("var(--surface"),
+        `${marker} 的 ${name} 指向了背景色（${value}），会导致文字看不见`);
+    }
+  }
+});

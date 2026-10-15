@@ -40,7 +40,9 @@ function resolveTarget(pathname) {
   } catch {
     return null;
   }
-  if (decoded.endsWith("/")) decoded += "index.html";
+  // 站点根路径与目录路径都落到 index.html
+  if (decoded === "/" || decoded === "" || decoded.endsWith("/")) decoded += "index.html";
+  if (decoded === "/keyboard") decoded = "/index.html";
   const full = path.resolve(path.join(PUBLIC_DIR, decoded));
   const rootResolved = path.resolve(PUBLIC_DIR);
   if (full !== rootResolved && !full.startsWith(rootResolved + path.sep)) return null;
@@ -52,9 +54,7 @@ function resolveTarget(pathname) {
 
 const server = http.createServer((request, response) => {
   const url = new URL(request.url, `http://127.0.0.1:${PORT}`);
-  // 方便记：/keyboard 与键盘页等价
-  const pathname = url.pathname === "/keyboard" ? "/index.html" : url.pathname;
-  const target = resolveTarget(pathname);
+  const target = resolveTarget(url.pathname);
 
   if (!target || !fs.existsSync(target)) {
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("404 找不到该文件");

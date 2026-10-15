@@ -10,12 +10,16 @@
   --canvas: #f4f5f9;
   --panel: #ffffff;
   --violet: #6858d5;
+  /* 用于深色底上的紫色文字：需要比 --violet 更亮才够对比度 */
+  --violet-text: #6858d5;
   --violet-soft: #f1efff;
   --navy: #101126;
   --mint: #9de8df;
   --amber: #9d7614;
   /* 语义色：原先散落的硬编码值，统一收敛到这里 */
   --on-accent: #ffffff;
+  /* 用于装饰性深色面（星球视图、键盘面板、toast）上的文字，两套主题都保持白色 */
+  --on-space: #ffffff;
   --surface: #ffffff;
   --surface-raised: #fafafe;
   --surface-sunken: #f1f1f5;
@@ -102,12 +106,16 @@
   --line: #2a2d44;
   --canvas: #0e0f1b;
   --panel: #171a2b;
-  --violet: #8b7cf0;
+  /* 主色需要足够暗，才能让白色按钮文字达到 4.5:1 对比度（#7d6cf0 只有 3.98） */
+  --violet: #6a5ae0;
+  /* #6a5ae0 作为文字在暗色画布上只有 3.76，文字场景改用更亮的紫 */
+  --violet-text: #8b7cf0;
   --violet-soft: #24224a;
   --navy: #0b0c18;
   --mint: #6fe0cf;
   --amber: #ffc46b;
-  --on-accent: var(--surface);
+  --on-accent: #ffffff;
+  --on-space: #ffffff;
   --surface: #171a2b;
   --surface-raised: #1d2033;
   --surface-sunken: #1c1f33;
@@ -120,7 +128,7 @@
   --input-focus: #4b43a0;
   --button-ink: #e7e9f3;
   --tab-ink: #b9bdd2;
-  --tab-ink-active: var(--surface);
+  --tab-ink-active: #ffffff;
   --tab-hover: #20233a;
   --control-ink: #c3c7dc;
   --state-ink: #b3b7cc;
@@ -130,7 +138,7 @@
   --list-ink: #dfe2ef;
   --list-sub-ink: #9ba0b8;
   --list-hover: #302d57;
-  --detail-ink: var(--surface);
+  --detail-ink: #ffffff;
   --detail-sub-ink: #b7bacb;
   --chip-bg: #2a2b4a;
   --chip-ink: #d8d9e5;
@@ -138,13 +146,13 @@
   --dark-input-bg: #1c1d36;
   --dark-input-ink: #f4f4f8;
   --focus-ring: #6f63d8;
-  --star-ink: var(--surface);
+  --star-ink: #ffffff;
   --star-accent: #8ddbd2;
   --on-mint: var(--space-detail);
   --keycap-border: #343653;
   --keycap-shadow: #080912;
   --keycap-bg: #25263f;
-  --keycap-ink: var(--surface);
+  --keycap-ink: #ffffff;
   --keycap-on: #111225;
   --keycap-on-shadow: #62bab0;
   --keycap-pressed: #2aba74;
@@ -230,7 +238,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   font-weight: 700;
 }
 .button:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-raised); }
-.button.primary { border-color: var(--violet); background: var(--violet); color: var(--surface); }
+.button.primary { border-color: var(--violet); background: var(--violet); color: var(--on-accent); }
 /* 主题切换按钮：与 .button 同尺寸，但不抢主操作视觉 */
 .theme-toggle {
   min-height: 40px;
@@ -276,7 +284,7 @@ a.main-tab {
   align-items: center;
   justify-content: center;
   text-decoration: none;
-  color: var(--violet);
+  color: var(--violet-text);
   font-weight: 700;
 }
 .page { min-width: 0; padding: 18px 24px 22px; }
@@ -290,7 +298,7 @@ a.main-tab {
 }
 .eyebrow, .detail-eyebrow {
   display: block;
-  color: var(--violet);
+  color: var(--violet-text);
   font-size: 12px;
   font-weight: 800;
   margin-bottom: 10px;
@@ -307,7 +315,7 @@ a.main-tab {
   color: var(--control-ink);
   font-weight: 700;
 }
-.view-switch > button.active, .segmented button.active { background: var(--violet); color: var(--surface); }
+.view-switch > button.active, .segmented button.active { background: var(--violet); color: var(--on-accent); }
 
 .search-strip {
   min-height: 50px;
@@ -383,7 +391,7 @@ a.main-tab {
   box-shadow: 0 0 8px color-mix(in srgb, var(--color), transparent 25%);
 }
 .planet-song span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.planet-song:hover, .planet-song.active { color: var(--surface); font-weight: 800; }
+.planet-song:hover, .planet-song.active { color: var(--on-space); font-weight: 800; }
 .planet-song.active { outline: 1px solid var(--focus-ring); outline-offset: 3px; border-radius: 14px; }
 .planet-song.active i { width: 22px; height: 22px; min-width: 22px; box-shadow: 0 0 0 5px var(--space-ring), 0 0 14px var(--color); }
 @keyframes drift { 50% { translate: 0 -5px; } }
@@ -398,7 +406,7 @@ a.main-tab {
   border-radius: 20px;
   padding: 19px;
   background: var(--space-detail);
-  color: var(--surface);
+  color: var(--on-space);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -449,14 +457,14 @@ a.main-tab {
 .slot-target.drag-over { border-color: var(--violet); background: var(--violet-soft); }
 .slot-badge {
   width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--violet); color: var(--surface); font-weight: 800;
+  background: var(--violet); color: var(--on-accent); font-weight: 800;
 }
 .slot-target div { min-width: 0; display: grid; gap: 5px; }
 .slot-target strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .slot-target small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .save-button {
   min-width: 116px; min-height: 40px; border: 0; border-radius: 9px;
-  background: var(--space-button); color: var(--surface); font-weight: 800;
+  background: var(--space-button); color: var(--on-space); font-weight: 800;
 }
 
 .preview-chip { background: var(--warning-bg); color: var(--amber); }
@@ -469,13 +477,13 @@ a.main-tab {
   gap: 12px;
   align-items: stretch;
   background: var(--space-deck);
-  color: var(--surface);
+  color: var(--on-space);
 }
 .keyboard-deck > div { display: flex; flex-direction: column; justify-content: center; gap: 7px; }
 .keyboard-deck > div span { color: var(--list-sub-ink); font-size: 11px; }
 .keycap {
   min-width: 0; border: 1px solid var(--keycap-border); border-bottom: 4px solid var(--keycap-shadow);
-  border-radius: 8px; background: var(--keycap-bg); color: var(--surface); display: grid; place-content: center; gap: 3px;
+  border-radius: 8px; background: var(--keycap-bg); color: var(--keycap-ink); display: grid; place-content: center; gap: 3px;
   font-weight: 700;
 }
 .keycap.active { border-color: var(--mint); border-bottom-color: var(--keycap-on-shadow); background: var(--mint); color: var(--keycap-on); }
@@ -493,7 +501,7 @@ a.main-tab {
 .form-row > label { font-size: 13px; }
 .role-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .role-row button { min-height: 38px; border: 1px solid var(--role-border); border-radius: 8px; background: var(--role-bg); color: var(--role-ink); font-weight: 700; }
-.role-row button.active { background: var(--violet); border-color: var(--violet); color: var(--surface); }
+.role-row button.active { background: var(--violet); border-color: var(--violet); color: var(--on-accent); }
 .spin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .spin-grid.inactive { opacity: .52; }
 .spin-grid label { display: grid; gap: 5px; color: var(--label-ink); font-size: 12px; }
@@ -522,7 +530,7 @@ a.main-tab {
 .mapping-summary > p { margin: 6px 0 10px; font-size: 12px; }
 .summary-row { min-height: 55px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-divider); }
 .summary-row span {
-  min-width: 40px; height: 30px; border-radius: 7px; display: grid; place-items: center; background: var(--violet); color: var(--surface); font-weight: 800;
+  min-width: 40px; height: 30px; border-radius: 7px; display: grid; place-items: center; background: var(--violet); color: var(--on-accent); font-weight: 800;
 }
 .write-state { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding: 16px 0 10px; }
 .write-state span { color: var(--muted); font-size: 12px; }
@@ -552,7 +560,7 @@ a.main-tab {
   min-height: 49px; border: 1px solid var(--key-idle-border); border-radius: 6px; background: var(--key-idle-bg);
   display: grid; place-content: center; text-align: center; color: var(--key-idle-ink); font-size: 13px;
 }
-.key-status div.pressed { border-color: var(--key-pressed-border); background: var(--key-pressed-bg); color: var(--surface); }
+.key-status div.pressed { border-color: var(--key-pressed-border); background: var(--key-pressed-bg); color: var(--on-accent); }
 .key-status div small { font-size: 11px; opacity: .8; }
 .firmware-card { min-height: 375px; padding: 18px; }
 .firmware-card > p { font-size: 13px; }
@@ -584,7 +592,7 @@ footer {
 }
 .toast {
   position: fixed; right: 18px; bottom: 18px; z-index: 100; max-width: min(440px, calc(100vw - 36px));
-  border-radius: 9px; padding: 12px 15px; background: var(--toast-bg); color: var(--surface); box-shadow: 0 12px 34px var(--toast-shadow);
+  border-radius: 9px; padding: 12px 15px; background: var(--toast-bg); color: var(--on-space); box-shadow: 0 12px 34px var(--toast-shadow);
 }
 .toast.success { background: var(--toast-success); }
 .toast.error { background: var(--toast-error); }

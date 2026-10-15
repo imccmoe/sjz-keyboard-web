@@ -73,7 +73,8 @@ scripts/dev.mjs         零依赖本地静态服务器
 ## 测试
 
 ```powershell
-npm test
+npm test              # 单元测试与主题/对比度检查（纯 Node，无需依赖与网络）
+npm run ui:contrast   # 用真实浏览器检查文字对比度（需先 npm run dev）
 ```
 
 不需要安装任何依赖，Node 内置测试运行器即可。
@@ -82,7 +83,24 @@ npm test
 | --- | --- |
 | `tests/protocol.test.js` | 曲包协议、旋转灵敏度换算、键位/灯光往返、加密固件校验 |
 | `tests/device-wire.test.js` | WebHID 报文往返、OTA 分区基址、旋转键 v1→v2 过渡 |
-| `tests/theme.test.js` | 亮暗变量集合一致、无自引用变量、无硬编码颜色、主题只有一条触发路径 |
+| `tests/theme.test.js` | 亮暗变量集合一致、无自引用变量、无硬编码颜色、主题只有一条触发路径、前景色不误用背景色 |
+| `tests/contrast.test.js` | 主色承载白字、薄荷底承载深字、正文与背景、紫色文字的 WCAG 对比度 |
+
+`npm run ui:contrast` 会在无头浏览器里对按钮、标签、按键、徽标等元素逐个计算对比度，
+并报告不达标的项。它抓的是「文字与背景撞色导致看不见」这类静态检查发现不了的问题：
+
+```
+[dark 主题]
+  ✔ .button.primary   5.06 (需 4.5)  rgb(255,255,255) on rgb(106,90,224)  "连接"
+  ✖ .eyebrow          3.76 (需 4.5)  rgb(106,90,224) on rgb(14,15,27)     "发现音乐"
+```
+
+配色上有两条容易踩的约束，已由测试固定：
+
+- **主色要够暗**：`--violet` 用于按钮底色并承载白字，必须满足 4.5:1
+  （`#7d6cf0` 只有 3.98，会把按钮文字变得难辨）
+- **紫色文字要另用变量**：同一个色既做底色又做文字会互相矛盾，
+  深色底上的紫字用 `--violet-text`（比 `--violet` 更亮）
 
 > `node --test` 会为每个测试文件派生一个子进程。若运行环境禁止 spawn（报 `EPERM`），
 > 逐个文件直接跑即可：`node tests/protocol.test.js`。

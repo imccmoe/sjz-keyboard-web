@@ -7,7 +7,7 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "dev": "node scripts/dev.mjs",
-    "serve": "python -m http.server 8788 --directory public"
+    "ui:contrast": "node scripts/ui-contrast-check.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
