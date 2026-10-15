@@ -58,6 +58,27 @@ export function text(value, max = 200) {
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
 
+/**
+ * 解码路径参数。
+ *
+ * Pages 的运行时不保证 `params` 已经过 URI 解码：本地 `wrangler pages dev`
+ * 传入的就是原样的百分号编码（`params.id === "%E5%B0%8F%E6%98%9F%E6%98%9F"`），
+ * 而曲目主键与标题大量含中文、空格，直接拿去查库会一律 404。
+ *
+ * 因此这里统一解码一次：已经解码过的值（不含 %XX）原样返回；
+ * 含孤立 `%` 的标题（如 "100% Love"）解码会抛错，此时也原样返回。
+ */
+export function decodeParam(value) {
+  if (value === null || value === undefined) return "";
+  const raw = String(value);
+  if (!/%(?:[0-9A-Fa-f]{2})/.test(raw)) return raw;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export function int(value, fallback = 0, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
   const parsed = Number.parseInt(String(value ?? "").replace(/[^\d-]/g, ""), 10);
   if (!Number.isFinite(parsed)) return fallback;

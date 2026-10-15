@@ -2,7 +2,7 @@
 // 真实浏览器里逐元素检查文字对比度，专门抓「文字与背景撞色导致看不见」。
 //
 // 用法：node scripts/ui-contrast-check.mjs [baseUrl]
-// 需要先运行 npm run dev。
+// 需要先运行 npx wrangler pages dev public（曲库存放在 D1，静态服务器上曲库为空）。
 //
 // 用 WCAG 相对亮度公式计算对比度：
 //   大号文字（>=18.66px 粗体 或 >=24px）要求 >= 3.0

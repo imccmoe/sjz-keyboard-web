@@ -6,7 +6,10 @@
 // 全部需要 Authorization: Bearer <ADMIN_TOKEN>。
 // :id 支持数据库主键或曲目编号（纯数字）。
 import { d1, normalizeSong, shapeSong } from "../../_lib/songs.js";
-import { adminGuard, fail, methodNotAllowed, ok, readJsonBody, text } from "../../_lib/http.js";
+import { adminGuard, decodeParam, fail, methodNotAllowed, ok, readJsonBody, text } from "../../_lib/http.js";
+
+/** 路径参数统一解码：本地 Pages 运行时传进来的是百分号编码。 */
+const paramId = (params) => text(decodeParam(Array.isArray(params.id) ? params.id[0] : params.id), 120);
 
 async function findRow(db, raw) {
   let row = await db.prepare("SELECT * FROM songs WHERE id = ?").bind(raw).first();
@@ -21,7 +24,7 @@ export async function onRequestGet({ request, env, params }) {
   if (denied) return denied;
   try {
     const db = d1(env);
-    const row = await findRow(db, text(params.id, 120));
+    const row = await findRow(db, paramId(params));
     if (!row) return fail(404, "not_found", "曲目不存在");
     return ok({ song: shapeSong(row) });
   } catch (error) {
@@ -34,7 +37,7 @@ export async function onRequestPatch({ request, env, params }) {
   if (denied) return denied;
   try {
     const db = d1(env);
-    const row = await findRow(db, text(params.id, 120));
+    const row = await findRow(db, paramId(params));
     if (!row) return fail(404, "not_found", "曲目不存在");
 
     const { body, error } = await readJsonBody(request);
@@ -86,7 +89,7 @@ export async function onRequestDelete({ request, env, params }) {
   if (denied) return denied;
   try {
     const db = d1(env);
-    const row = await findRow(db, text(params.id, 120));
+    const row = await findRow(db, paramId(params));
     if (!row) return fail(404, "not_found", "曲目不存在");
 
     // 编号不复用：删除后不回退计数器，避免键盘里已保存的编号指向另一首歌

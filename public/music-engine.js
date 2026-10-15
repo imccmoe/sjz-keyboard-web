@@ -14,6 +14,14 @@ const PREVIEW_SAMPLE_RATE = 44100;
 let audioContext = null;
 let activePreview = null;
 let physicalBankPromise = null;
+/**
+ * 试听「代」计数：每次开始或停止都推进一代。
+ *
+ * 渲染是异步的（要读音色库、铺 PCM），期间可能已经被停止、或被另一首歌的试听取代。
+ * 那一次渲染回到主流程时如果照样 start()，就会出现「点了停止音乐还响」
+ * —— 而且此时界面已经回到「试听」，用户根本没有停止入口。
+ */
+let previewGeneration = 0;
 
 export function crc32(bytes) {
   let crc = 0xffffffff;
@@ -352,6 +360,8 @@ async function renderPreview(compiled) {
 }
 
 export function stopPreview() {
+  // 先推进一代：让「正在渲染但还没出声」的那次作废。
+  previewGeneration += 1;
   if (!activePreview) return;
   window.clearTimeout(activePreview.timer);
   for (const source of activePreview.sources) {
@@ -364,9 +374,14 @@ export function stopPreview() {
 
 export async function startPreview(compiled, onDone) {
   stopPreview();
+  const generation = previewGeneration;
   const pcm = await renderPreview(compiled);
+  // 渲染期间被停止、或被更新的试听取代：直接放弃，不要出声
+  if (generation !== previewGeneration) return;
   audioContext ||= new AudioContext({ sampleRate: PREVIEW_SAMPLE_RATE });
   await audioContext.resume();
+  // resume() 同样是异步的，期间也可能已经被停止
+  if (generation !== previewGeneration) return;
   const buffer = audioContext.createBuffer(1, pcm.length, PREVIEW_SAMPLE_RATE);
   buffer.copyToChannel(pcm, 0);
   const source = audioContext.createBufferSource();

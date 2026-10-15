@@ -2,8 +2,7 @@ name = "sjz-keyboard-web"
 compatibility_date = "2026-08-12"
 pages_build_output_dir = "public"
 
-# 曲库放在 D1：原先 public/data/music-catalog.json 需要改文件再重新部署，
-# 迁到 D1 后可以随时通过 /api/admin/songs 增删改。
+# 曲库只存放在 D1：随时通过 /api/admin/songs 增删改，无需改文件重新部署。
 [[d1_databases]]
 binding = "DB"
 database_name = "sjz-keyboard-web"

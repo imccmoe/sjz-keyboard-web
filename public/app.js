@@ -540,12 +540,43 @@ function bindEvents() {
       if (button && !button.disabled) handleAction(button);
     });
   }
-  document.addEventListener("keydown", (event) => {
-    if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return;
-    if (event.key !== "L" && event.key !== "l") return;
-    event.preventDefault();
-    switchTheme();
-  });
+  // 全局快捷键同样只能挂一次。bindEvents() 每次 render() 都会执行，
+  // 无守卫地 addEventListener("keydown") 会不断累积监听器：
+  // 奇数个时「看起来正常」，偶数个时 Ctrl+Shift+L 切两次又切回去，表现为按了没反应。
+  if (!document.documentElement.dataset.shortcutBound) {
+    document.documentElement.dataset.shortcutBound = "1";
+    // 用捕获阶段：先于页面内其它 keydown 处理，拦截才有效
+    document.addEventListener("keydown", (event) => {
+      if (isDevtoolsShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return;
+      if (event.key !== "L" && event.key !== "l") return;
+      event.preventDefault();
+      switchTheme();
+    }, true);
+  }
+}
+
+/**
+ * 是否为开发者工具 / 查看源码的快捷键（F12、Ctrl/Cmd+Shift+I / J / C、Ctrl/Cmd+U）。
+ *
+ * 说明：这只是页面级的按键拦截，属于「避免误触」，**不是安全措施** ——
+ * 浏览器菜单里的「开发者工具」「查看网页源代码」、右键「检查」、
+ * 以及远程调试端口都能绕过它。
+ *
+ * 例外：正在「键位设置」里录制按键时不拦截，否则 F12 这类键就没法映射成键盘输出。
+ */
+function isDevtoolsShortcut(event) {
+  if (event.target && event.target.id === "key-capture") return false;
+  const key = event.key;
+  if (key === "F12") return true;
+  if (!(event.ctrlKey || event.metaKey)) return false;
+  const upper = typeof key === "string" ? key.toUpperCase() : "";
+  if (event.shiftKey && ["I", "J", "C"].includes(upper)) return true;
+  return upper === "U";
 }
 
 /**
@@ -697,6 +728,11 @@ async function previewSong(songId) {
   render();
   try {
     await startPreview(song.compiled, () => {
+      // 只有「仍是这首歌在试听」时才清状态。
+      // 切歌试听时，startPreview() 会先 stopPreview()，从而触发上一首的 onDone；
+      // 若在这里无条件清空，会把新歌刚设好的 previewSongId 一起清掉 ——
+      // 按钮退回「试听」，而新歌实际在播放，界面上就没有任何停止入口了。
+      if (state.previewSongId !== songId) return;
       state.previewSongId = null;
       render();
     });
@@ -1108,38 +1144,26 @@ async function performFirmwareUpload(bootloader) {
 }
 
 /**
- * 读取曲库。优先走 D1 API，取不到时回退到随站点发布的 JSON 快照 ——
- * 这样离线、或 API 未部署（例如只跑静态服务器）时页面仍然可用。
+ * 读取曲库。曲库只存放在 D1，页面始终通过 API 读取，不再有本地 JSON 快照 ——
+ * 静态资源服务器上没有 Functions，曲库会读不到，需要 wrangler pages dev 或已部署环境。
  */
 async function loadCatalog(reload = false) {
   const stamp = reload ? `?t=${Date.now()}` : "";
-  let payload = null;
-  let source = "";
-
+  let data;
   try {
     const response = await fetch(`./api/songs${stamp}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
+    data = await response.json();
     if (!data.ok) throw new Error(data.message || data.error || "接口返回失败");
-    payload = data;
-    source = "D1";
   } catch (apiError) {
-    try {
-      const response = await fetch(`./data/music-catalog.json${stamp}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      payload = await response.json();
-      source = "本地 JSON 快照";
-    } catch {
-      state.songs = [];
-      render();
-      showToast(`曲库读取失败：API（${apiError.message}）与本地快照都不可用`, "error");
-      return;
-    }
+    state.songs = [];
+    render();
+    showToast(`曲库读取失败：${apiError.message}（曲库存放在 D1，请用 wrangler pages dev 或已部署站点打开）`, "error");
+    return;
   }
 
   try {
-    const songs = Array.isArray(payload) ? payload : payload.songs || [];
-    state.catalogSource = source;
+    const songs = Array.isArray(data) ? data : data.songs || [];
     state.songs = songs
       .filter((song) => song.verified)
       .map((song, catalogIndex) => ({
@@ -1151,7 +1175,7 @@ async function loadCatalog(reload = false) {
       .sort((left, right) => left.test_stage - right.test_stage || left.catalogIndex - right.catalogIndex);
     state.selectedSongId = state.songs.some((song) => song.id === state.selectedSongId) ? state.selectedSongId : state.songs[0]?.id || null;
     render();
-    if (reload) showToast(`曲库已重新加载，共 ${state.songs.length} 首（来源：${source}）`);
+    if (reload) showToast(`曲库已重新加载，共 ${state.songs.length} 首`);
   } catch (error) {
     state.songs = [];
     render();

@@ -101,6 +101,10 @@ test("主题切换只有一条触发路径，避免重复绑定导致切换两�
   assert.match(app, /if \(!document\.documentElement\.dataset\.actionDelegateBound\)\s*\{/,
     "委托监听必须用一次性标志防止重复挂载");
   assert.match(app, /dataset\.themeHoldBound/, "长按绑定也必须有一次性标志");
+  // 全局 keydown 快捷键同理：bindEvents() 每次 render() 都跑，
+  // 无守卫会累积监听器，Ctrl+Shift+L 在偶数个监听器时切两次又切回去，表现为按了没反应。
+  assert.ok(/if \(!document\.documentElement\.dataset\.shortcutBound\)\s*\{[\s\S]*?addEventListener\("keydown"/.test(app),
+    "全局 keydown 快捷键必须用一次性标志包住，避免重复挂载");
 
   // 主题按钮本身不能再有独立的 click 切换路径
   const direct = [...app.matchAll(/addEventListener\("click",\s*switchTheme\)|toggleLightDark\(\);\s*\n\s*syncThemeButton\(\);/g)];

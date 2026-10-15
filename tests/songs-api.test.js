@@ -99,6 +99,54 @@ test("GET /api/songs/:id 支持主键、编号与标题三种定位", async () =
   assert.equal(missing.response.status, 404);
 });
 
+// 本地 Pages 运行时（wrangler pages dev）传给 handler 的 params 是**未解码**的百分号编码，
+// 而曲目主键与标题大量含中文和空格。这条路径曾经漏测：本地实测 /api/songs/小星星 一律 404，
+// 管理页对中文主键曲目的编辑与删除也同样失败。
+test("路径参数为百分号编码时（运行时真实行为）仍能按主键与标题定位", async () => {
+  const spaced = { ...SONG_A, id: "reference-参考1", music_id: 7, title: "See You Again" };
+  const percent = { ...SONG_A, id: "song-pct", music_id: 8, title: "100% Love" };
+  const db = seedDatabase([SONG_A, SONG_B, spaced, percent]);
+  const env = apiEnv(db);
+  const get = (id) => callApi("../functions/api/songs/[id].js", { params: { id }, env });
+
+  // 编码形态：运行时实际传入的样子
+  assert.equal((await get(encodeURIComponent("小星星"))).payload.song.id, "song-a", "编码后的中文主键");
+  assert.equal((await get(encodeURIComponent("reference-参考1"))).payload.song.music_id, 7, "编码后的中文主键（含连字符）");
+  assert.equal((await get(encodeURIComponent("See You Again"))).payload.song.music_id, 7, "编码后的含空格标题");
+
+  // 已解码形态：不能被二次解码弄坏（测试与其它运行时传入的就是解码后的值）
+  assert.equal((await get("小星星")).payload.song.id, "song-a", "已解码的中文主键");
+  assert.equal((await get("See You Again")).payload.song.music_id, 7, "已解码的含空格标题");
+
+  // 标题自带孤立 %：解码会抛 URIError，必须原样查库而不是 500
+  assert.equal((await get("100%25%20Love")).payload.song.music_id, 8, "编码后的 % 标题");
+  assert.equal((await get("100% Love")).payload.song.music_id, 8, "标题含孤立 %");
+
+  assert.equal((await get(encodeURIComponent("不存在"))).response.status, 404);
+});
+
+test("管理端编辑与删除：路径参数编码后仍能命中中文主键", async () => {
+  // 种子曲库里的主键就是中文标题（如 '小星星'），编辑/删除走的就是这条路径
+  const chineseKey = { ...SONG_A, id: "小星星" };
+  const db = seedDatabase([chineseKey, SONG_B]);
+  const env = apiEnv(db);
+  const encoded = encodeURIComponent("小星星");
+
+  const patched = await callApi("../functions/api/admin/songs/[id].js", {
+    method: "PATCH", token: ADMIN_TOKEN, params: { id: encoded },
+    body: { title: "小星星（改）", test_stage: 1 }, env
+  });
+  assert.equal(patched.response.status, 200);
+  assert.equal(patched.payload.song.title, "小星星（改）");
+
+  const removed = await callApi("../functions/api/admin/songs/[id].js", {
+    method: "DELETE", token: ADMIN_TOKEN, params: { id: encoded }, env
+  });
+  assert.equal(removed.response.status, 200);
+  assert.equal(removed.payload.deleted.music_id, 1);
+  assert.equal(db.tables.songs.length, 1);
+});
+
 test("管理端列表需要令牌", async () => {
   const db = seedDatabase([SONG_A]);
   const denied = await callApi("../functions/api/admin/songs/index.js", { env: apiEnv(db) });
@@ -247,22 +295,18 @@ test("迁移文件定义了 songs 与计数器，且种子 SQL 可执行", async
   assert.match(migration, /music_id INTEGER NOT NULL UNIQUE/, "曲目编号必须唯一");
   assert.match(migration, /idx_songs_stage/, "缺少阶段索引");
 
-  const { buildSongSeed } = await import("../scripts/build-song-seed.mjs");
-  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "data", "music-catalog.json"), "utf8"));
-  const { sql, rows, nextMusicId } = buildSongSeed(catalog.songs, { batchSize: 10 });
-  assert.equal(rows, catalog.songs.length);
-  assert.equal(nextMusicId, 26, "25 首之后下一个编号应为 26");
-
-  // 在模拟 D1 上真跑一遍，确认 SQL 语法与字段对齐
+  // 种子 SQL 是曲库唯一的数据快照（不再随站点发布 JSON），在模拟 D1 上真跑一遍，
+  // 确认语法可执行、行数与编号对齐
+  const seedSql = fs.readFileSync(path.join(ROOT, "seeds", "songs.sql"), "utf8");
   const db = new MockD1({ songs: [], song_counters: [{ name: "next_music_id", value: 1 }] },
     { primaryKeys: { songs: "id", song_counters: "name" } });
-  for (const statement of splitStatements(sql)) {
+  for (const statement of splitStatements(seedSql)) {
     const head = statement.trim().toUpperCase();
     if (!head.startsWith("SELECT")) await db.prepare(statement).run();
   }
-  assert.equal(db.tables.songs.length, catalog.songs.length);
-  assert.equal(db.tables.song_counters[0].value, 26);
-  // music_id 必须原样保留
+  assert.equal(db.tables.songs.length, 25);
+  assert.equal(db.tables.song_counters[0].value, 26, "25 首之后下一个编号应为 26");
+  // music_id 必须原样保留且连续
   const ids = db.tables.songs.map((s) => s.music_id).sort((a, b) => a - b);
-  assert.deepEqual(ids, catalog.songs.map((s) => s.music_id).sort((a, b) => a - b));
+  assert.deepEqual(ids, Array.from({ length: 25 }, (_, index) => index + 1));
 });

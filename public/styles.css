@@ -283,8 +283,13 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 @media (max-width: 660px) {
   .theme-toggle { right: 10px; bottom: 10px; width: 36px; height: 36px; font-size: 16px; }
 }
+/* 设备状态块与「连接」按钮同高（40px）。
+   高度曾经是 54px，比同一行的按钮高出一头，看起来像另一个更大的按钮；
+   窄屏（≤660px）下控件区变成两列网格，状态块会与按钮并排且等宽，
+   更要保持同高 —— 所以高度只在这里定义，不再按断点单独覆盖。
+   注意 box-sizing 是 border-box，40px 就是含边框的总高，与 .button 的 min-height 一致。 */
 .device-state {
-  height: 54px;
+  height: 40px;
   min-width: 70px;
   border-radius: 12px;
   display: grid;
@@ -351,11 +356,14 @@ a.main-tab {
 .view-switch > button.active, .segmented button.active { background: var(--violet); color: var(--on-accent); }
 
 /* 搜索筛选栏：标签 + 搜索框 + 阶段下拉 + 匹配计数。
-   控件统一成胶囊造型，图标用内联 SVG（currentColor，随主题自适应）。 */
+   控件统一成胶囊造型，图标用内联 SVG（currentColor，随主题自适应）。
+   最后一列（匹配计数）必须是固定宽度，不能用 auto：
+   「星球展示 25 首」比「全部 25 首」宽 26px，auto 会让 1fr 的搜索框
+   在两种视图间来回伸缩（实测 936px ↔ 962px），看起来搜索栏长度变了。 */
 .search-strip {
   min-height: 54px;
   display: grid;
-  grid-template-columns: auto minmax(200px, 1fr) minmax(180px, 240px) auto;
+  grid-template-columns: auto minmax(200px, 1fr) minmax(180px, 240px) 112px;
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
@@ -641,17 +649,23 @@ a.main-tab {
 .slot-heading { display: flex; align-items: baseline; gap: 12px; margin: 12px 0 8px; }
 .slot-heading strong { font-size: 16px; }
 .slot-heading span { font-size: 12px; }
-/* 键位卡片右侧留出空档：右下角是固定定位的主题按钮，
-   卡片若一路铺到最右边，在视口较矮时两者会叠在一起（实测卡片底边超出屏幕，
-   与按钮在 y 732~745 相交）。留出这段宽度即可让角落始终干净。 */
-.slot-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-right: 52px; }
+/* 三张键位卡片等宽铺满整行，左右边缘与上方搜索栏、星球区对齐。
+   曾经整行留 52px 右内边距来避开右下角的浮动主题按钮，代价是整行右边缘
+   比上方内容缩进 52px、看起来没对齐。现在让「卡片外框」贴齐整行，
+   避让改到卡片内部（见 .slot-target 的右内边距）。 */
+.slot-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .slot-target {
   min-width: 0;
   min-height: 76px;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: var(--surface);
-  padding: 10px 12px;
+  /* 右侧留 32px 而不是 12px：卡片里唯一的可交互元素是「保存到 Kx」按钮，
+     它不能伸进右下角浮动主题按钮的范围（.theme-toggle 宽 38px + right 12px
+     → 距视口右缘 50px；页面内容右缘距视口右缘 24px，故卡片内至少要留 26px）。
+     实测该视口下检查点余量 8px。右侧加宽只影响卡片内部，三张卡片的
+     外框与三个保存按钮之间仍然各自对齐。 */
+  padding: 10px 32px 10px 12px;
   display: grid;
   grid-template-columns: 50px minmax(0, 1fr) auto;
   align-items: center;
@@ -823,7 +837,6 @@ footer {
   .device-controls { width: 100%; display: grid; grid-template-columns: 1fr 1fr; justify-content: stretch; }
   .device-controls label { grid-column: 1 / -1; }
   .device-controls .select-wrap { grid-column: 1 / -1; width: 100%; }
-  .device-state { height: 40px; }
   .main-tabs { height: 50px; overflow: hidden; }
   .main-tab { min-width: 0; width: 20%; flex: 1; padding: 0 3px; font-size: 12px; }
   .page { padding: 14px 12px 18px; }

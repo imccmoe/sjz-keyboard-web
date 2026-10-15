@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// 检查键盘页的两项交互：主题浮动按钮位置、星球视图是否显示全部曲目并可滚动。
+// 键盘页的界面与交互回归检查：主题浮动按钮、顶栏设备控件、搜索筛选栏、
+// 键位卡片对齐、调试快捷键、试听播放、简介区、星球视图、按钮悬停。
 //
 // 用法：node scripts/ui-layout-check.mjs [baseUrl]
 
@@ -20,8 +21,9 @@ if (!browser) {
 }
 
 const profile = path.join(os.tmpdir(), `layout-${process.pid}`);
+// --autoplay-policy：试听检查需要音频真的开始播放（合成点击不算用户手势）。
 const child = spawn(browser, ["--headless=new", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage",
-  "--no-first-run", "--hide-scrollbars", "--window-size=1440,900",
+  "--no-first-run", "--hide-scrollbars", "--window-size=1440,900", "--autoplay-policy=no-user-gesture-required",
   `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,6 +78,29 @@ async function main() {
   const evaluate = (expression) => client.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true })
     .then((r) => r.result?.value);
 
+  // 统计 document 上 keydown 的注册次数。bindEvents() 每次 render() 都会执行，
+  // 重复注册会让一次 Ctrl+Shift+L 切换多次 —— 偶数次时互相抵消，表现为「按了没反应」。
+  // 只比较切换结果查不出这个问题（3 个监听器看起来照样「正常」），必须数注册次数。
+  await client.send("Page.addScriptToEvaluateOnNewDocument", {
+    source: `window.__keydownRegistrations = 0;
+      const originalAddEventListener = Document.prototype.addEventListener;
+      Document.prototype.addEventListener = function (type, ...rest) {
+        if (type === "keydown") window.__keydownRegistrations += 1;
+        return originalAddEventListener.call(this, type, ...rest);
+      };
+      // 试听检查要用：确认真有音源开始 / 停止，而不是只看按钮文案
+      window.__audioStarts = 0;
+      window.__audioStops = 0;
+      if (typeof AudioBufferSourceNode !== "undefined") {
+        const originalStart = AudioBufferSourceNode.prototype.start;
+        const originalStop = AudioBufferSourceNode.prototype.stop;
+        AudioBufferSourceNode.prototype.start = function (...args) {
+          window.__audioStarts += 1; return originalStart.apply(this, args); };
+        AudioBufferSourceNode.prototype.stop = function (...args) {
+          window.__audioStops += 1; return originalStop.apply(this, args); };
+      }`
+  });
+
   await client.send("Page.navigate", { url: `${BASE}/?layout=${Date.now()}` });
   await sleep(4000);
 
@@ -126,6 +151,148 @@ async function main() {
   check("浮动按钮不遮挡任何可交互元素",
     (toggle?.coveredElements?.length ?? 1) === 0,
     `压在：${JSON.stringify(toggle?.coveredElements)}`);
+
+  console.log("\n[顶栏设备控件]");
+  // 回归：「未连接」状态块曾是 54px 高，比同一行的按钮高出一头，看着像另一个更大的按钮；
+  // 窄屏下控件区是两列网格，状态块会与按钮并排等宽，高度更容易被看成一回事。
+  // 两者必须同高，且与按钮在同一行居中对齐。
+  const bar = await evaluate(`(() => {
+    const box = (sel) => { const n = document.querySelector(sel); if (!n) return null;
+      const b = n.getBoundingClientRect(); return { h: Math.round(b.height), w: Math.round(b.width), top: Math.round(b.top) }; };
+    return {
+      state: box('.device-state'),
+      connect: box('button[data-action="connect-device"]'),
+      scan: box('button[data-action="scan-device"]')
+    };
+  })()`);
+  check("状态块与「连接」按钮同高",
+    bar?.state?.h === bar?.connect?.h,
+    `状态 ${bar?.state?.h}px vs 连接 ${bar?.connect?.h}px`);
+  check("状态块与按钮在同一行居中对齐",
+    Math.abs((bar?.state?.top ?? 0) - (bar?.connect?.top ?? 99)) <= 1,
+    `状态 top=${bar?.state?.top} 连接 top=${bar?.connect?.top}`);
+  check("「连接」与「刷新已授权设备」同高（按钮族一致）",
+    bar?.connect?.h === bar?.scan?.h,
+    `连接 ${bar?.connect?.h}px vs 刷新 ${bar?.scan?.h}px`);
+
+  console.log("\n[搜索筛选栏]");
+  // 回归：匹配计数那一列若是 auto，「星球展示 25 首」比「全部 25 首」宽 26px，
+  // 会把 1fr 的搜索框挤窄 / 撑宽（实测 936px ↔ 962px），切换视图时搜索栏长度会变。
+  const searchWidths = {};
+  for (const mode of ["planet", "list"]) {
+    await evaluate(`document.querySelector('[data-library-mode="${mode}"]').click()`);
+    await sleep(350);
+    searchWidths[mode] = await evaluate(`Math.round((document.querySelector('.search-field') || { getBoundingClientRect: () => ({ width: 0 }) }).getBoundingClientRect().width)`);
+  }
+  // 后面的检查依赖星球视图，切回去
+  await evaluate(`document.querySelector('[data-library-mode="planet"]').click()`);
+  await sleep(350);
+  check("搜索框在星球视图与全部音乐下等宽",
+    searchWidths.planet === searchWidths.list && searchWidths.planet > 0,
+    `星球 ${searchWidths.planet}px vs 全部 ${searchWidths.list}px`);
+
+  console.log("\n[键位卡片对齐]");
+  // 回归：三张卡片曾经带 52px 右内边距整体缩进，右边缘比上方搜索栏短一截。
+  const align = await evaluate(`(() => {
+    const rect = (sel) => { const n = document.querySelector(sel); if (!n) return null;
+      const b = n.getBoundingClientRect(); return { l: Math.round(b.left), r: Math.round(b.right), w: Math.round(b.width) }; };
+    return {
+      row: rect('.slot-row'),
+      strip: rect('.search-strip'),
+      cards: [...document.querySelectorAll('.slot-target')].map((n) => { const b = n.getBoundingClientRect();
+        return { l: Math.round(b.left), r: Math.round(b.right), w: Math.round(b.width) }; })
+    };
+  })()`);
+  check("键位行与搜索栏左右边缘对齐",
+    align?.row && align?.strip && align.row.l === align.strip.l && align.row.r === align.strip.r,
+    `行 ${align?.row?.l}~${align?.row?.r} vs 搜索栏 ${align?.strip?.l}~${align?.strip?.r}`);
+  check("第一张卡片贴左、第三张贴右",
+    (align?.cards?.length ?? 0) === 3 && align.cards[0].l === align.row.l && align.cards[2].r === align.row.r,
+    JSON.stringify(align?.cards));
+  check("三张卡片等宽",
+    new Set((align?.cards || []).map((card) => card.w)).size === 1 && (align?.cards || []).length === 3,
+    JSON.stringify((align?.cards || []).map((card) => card.w)));
+
+  console.log("\n[调试快捷键]");
+  // F12 与开发者工具快捷键要在页面里被拦下；普通按键不能被误拦。
+  const keys = await evaluate(`(() => {
+    const fire = (init) => { const event = new KeyboardEvent('keydown', Object.assign({ bubbles: true, cancelable: true }, init));
+      document.dispatchEvent(event); return event.defaultPrevented; };
+    return {
+      f12: fire({ key: 'F12' }),
+      inspect: fire({ key: 'I', ctrlKey: true, shiftKey: true }),
+      consolePanel: fire({ key: 'J', ctrlKey: true, shiftKey: true }),
+      source: fire({ key: 'u', ctrlKey: true }),
+      plain: fire({ key: 'a' })
+    };
+  })()`);
+  check("F12 被拦截", keys?.f12 === true, JSON.stringify(keys));
+  check("Ctrl+Shift+I / J 与 Ctrl+U 被拦截",
+    keys?.inspect === true && keys?.consolePanel === true && keys?.source === true, JSON.stringify(keys));
+  check("普通按键不被拦截", keys?.plain === false, JSON.stringify(keys));
+
+  // Ctrl+Shift+L 必须真的能切换主题；再配合下面的注册次数检查。
+  const shortcut = await evaluate(`(() => {
+    const press = () => document.dispatchEvent(new KeyboardEvent('keydown',
+      { key: 'l', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    const before = document.documentElement.dataset.theme;
+    press();
+    const once = document.documentElement.dataset.theme;
+    press();
+    const twice = document.documentElement.dataset.theme;
+    return { before, once, twice };
+  })()`);
+  check("Ctrl+Shift+L 能切换主题",
+    shortcut?.once !== shortcut?.before && shortcut?.twice === shortcut?.before,
+    JSON.stringify(shortcut));
+  // 精确检查「只挂一次」：多次 render() 之后仍然只能有 1 个 keydown 监听器。
+  const registrations = await evaluate(`window.__keydownRegistrations`);
+  check("document 上的 keydown 只注册一次",
+    registrations === 1, `实际注册 ${registrations} 次`);
+
+  console.log("\n[试听播放]");
+  // 回归（用户反馈「播放无法暂停」）：播放中切歌再点试听，
+  // startPreview() 会先 stopPreview()，触发上一首的 onDone；
+  // 它若无条件清空 previewSongId，会把新歌的状态一起清掉 ——
+  // 新歌在响，按钮却回到「试听」，界面上没有任何停止入口。
+  const preview = await evaluate(`(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const button = () => document.querySelector('[data-action="preview-song"]');
+    const label = () => (button() ? button().textContent.trim() : '');
+    const pick = (title) => [...document.querySelectorAll('.planet-song')].find((n) => n.textContent.trim() === title);
+    const titles = [...document.querySelectorAll('.planet-song')].map((n) => n.textContent.trim());
+    if (label() === '停止') { button().click(); await sleep(500); }
+
+    pick(titles[0]).click();
+    await sleep(400);
+    button().click();
+    await sleep(1400);
+    const playingFirst = label();
+    const startsFirst = window.__audioStarts;
+
+    pick(titles[1]).click();
+    await sleep(400);
+    button().click();
+    await sleep(1800);
+    const afterSwitch = label();
+    const startsAfterSwitch = window.__audioStarts;
+
+    if (label() === '停止') { button().click(); await sleep(500); }
+    return {
+      titles: titles.slice(0, 2), playingFirst, startsFirst,
+      afterSwitch, startsAfterSwitch,
+      afterStop: label(), stops: window.__audioStops
+    };
+  })()`);
+  check("点试听后开始播放且按钮变为「停止」",
+    preview?.playingFirst === "停止" && (preview?.startsFirst ?? 0) >= 1,
+    JSON.stringify(preview));
+  check("播放中切歌再试听：新歌在播、按钮仍是「停止」（有停止入口）",
+    preview?.afterSwitch === "停止" && (preview?.startsAfterSwitch ?? 0) > (preview?.startsFirst ?? 0),
+    JSON.stringify(preview));
+  check("点「停止」后按钮回到「试听」且音源被停止",
+    preview?.afterStop === "试听" && (preview?.stops ?? 0) >= 1,
+    JSON.stringify(preview));
 
   console.log("\n[乐曲简介不压缩下方间距]");
   // 回归：长标题 + 两段简介会让右侧面板溢出 21px，把下方「拖到你的键盘」与
@@ -213,7 +380,18 @@ async function main() {
       slotTop: Math.round(document.querySelector('.slot-row').getBoundingClientRect().top)
     };
   })()`);
-  const catalogCount = JSON.parse(fs.readFileSync(path.join(process.cwd(), "public", "data", "music-catalog.json"), "utf8")).songs.length;
+  // 曲库存放在 D1：曲目数从 API 读取，页面只渲染 verified 的曲目，口径保持一致
+  let catalogCount;
+  try {
+    const response = await fetch(`${BASE}/api/songs`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    catalogCount = (payload.songs || []).filter((song) => Boolean(song.verified)).length;
+  } catch (error) {
+    console.error(`读取曲库失败：${error.message}`);
+    console.error("曲库只存放在 D1：请先用 `npx wrangler pages dev public` 启动带 Functions 与本地 D1 的服务器");
+    process.exit(2);
+  }
   check("星球渲染出全部曲目", planet?.rendered === catalogCount,
     `渲染 ${planet?.rendered} / 曲库 ${catalogCount}`);
   check("每首歌有唯一坐标（(x,y) 不重复）", planet?.uniquePositions === true,

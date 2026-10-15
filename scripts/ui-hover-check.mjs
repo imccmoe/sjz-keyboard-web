@@ -2,7 +2,7 @@
 // 强制 :hover 伪类，检查按钮在悬停状态下的文字与背景，专门抓「悬停后文字与背景撞色」。
 //
 // 用法：node scripts/ui-hover-check.mjs [baseUrl]
-// 需要先 npm run dev。
+// 需要先 npx wrangler pages dev public（曲库存放在 D1，静态服务器上曲库为空）。
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";

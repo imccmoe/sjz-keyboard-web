@@ -7,6 +7,23 @@ import {
   decodeKeyboardConfig, decodeLedConfig, encodeKeyboardConfig, encodeLedConfig, spinCounts,
 } from "../public/device-config.js";
 import { decryptFirmware } from "../public/firmware.js";
+import { MockD1 } from "./d1-mock.mjs";
+import { splitStatements } from "./sql-utils.mjs";
+
+/** 曲库唯一的数据快照是 seeds/songs.sql：在模拟 D1 上执行后取回曲目行。 */
+async function loadSeedSongs() {
+  const sql = readFileSync(new URL("../seeds/songs.sql", import.meta.url), "utf8");
+  const db = new MockD1(
+    { songs: [], song_counters: [{ name: "next_music_id", value: 1 }] },
+    { primaryKeys: { songs: "id", song_counters: "name" } }
+  );
+  for (const statement of splitStatements(sql)) {
+    if (/^\s*SELECT/i.test(statement)) continue;
+    await db.prepare(statement).run();
+  }
+  const { results } = await db.prepare("SELECT * FROM songs").all();
+  return results.sort((left, right) => left.music_id - right.music_id);
+}
 
 test("rotation sensitivity matches the calibrated 360 degree relationship", () => {
   assert.equal(spinCounts(3, 1), 12000);
@@ -43,13 +60,13 @@ test("LED fixed brightness and colors survive wire format round trip", () => {
   assert.deepEqual(encodeLedConfig(output), bytes);
 });
 
-test("latest song package carries its music ID and matches the PyQt reference", () => {
-  const catalog = JSON.parse(readFileSync(new URL("../public/data/music-catalog.json", import.meta.url), "utf8"));
-  assert.equal(catalog.songs.length, 25);
-  const packages = catalog.songs.map((item) => compileSong(item).packageBytes);
+test("latest song package carries its music ID and matches the PyQt reference", async () => {
+  const songs = await loadSeedSongs();
+  assert.equal(songs.length, 25);
+  const packages = songs.map((item) => compileSong(item).packageBytes);
   assert.equal(createHash("sha256").update(Buffer.concat(packages.map((item) => Buffer.from(item)))).digest("hex"),
     "460f0a6cf5d05ad0e1e1b55694414f8c4516cd75182a0a17b5915373c6fdbd2e");
-  const song = catalog.songs.find((item) => item.id === "小星星");
+  const song = songs.find((item) => item.id === "小星星");
   const data = compileSong(song).packageBytes;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   assert.equal(view.getUint16(4, true), 2);

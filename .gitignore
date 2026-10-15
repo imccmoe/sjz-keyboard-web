@@ -10,6 +10,3 @@ node_modules/
 # wrangler 的本地 D1 状态与缓存
 .wrangler/
 .wrangler-local/
-
-# 由 build-song-seed.mjs 生成的种子文件（内容是曲库的副本，不入库）
-seeds/*.sql
