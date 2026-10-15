@@ -59,6 +59,10 @@ npx wrangler d1 migrations apply sjz-keyboard-web --local
 npx wrangler d1 execute sjz-keyboard-web --local --file seeds/songs.sql
 ```
 
+> 改过 `wrangler.toml` 里的 `database_id` 之后，本地会切到**另一份空库**
+> （本地 D1 状态按 database_id 分目录存放），要重跑上面两条 `--local` 命令，
+> 否则页面会报 `D1_ERROR: no such table: songs`。
+
 `.dev.vars` 里放 `ADMIN_TOKEN`（该文件已被 gitignore），本地管理接口才可用。
 值随便填，**不要用线上令牌**：
 

@@ -21,9 +21,11 @@ if (!browser) {
 }
 
 const profile = path.join(os.tmpdir(), `layout-${process.pid}`);
+// 不要加 --hide-scrollbars：那会让滚动条变成覆盖式、不占布局宽度，
+// 「切换标签时整页不横跳」这类检查就永远测不出来了（真实 Windows 浏览器是占位的经典滚动条）。
 // --autoplay-policy：试听检查需要音频真的开始播放（合成点击不算用户手势）。
 const child = spawn(browser, ["--headless=new", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage",
-  "--no-first-run", "--hide-scrollbars", "--window-size=1440,900", "--autoplay-policy=no-user-gesture-required",
+  "--no-first-run", "--window-size=1440,900", "--autoplay-policy=no-user-gesture-required",
   `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -293,6 +295,40 @@ async function main() {
   check("点「停止」后按钮回到「试听」且音源被停止",
     preview?.afterStop === "试听" && (preview?.stops ?? 0) >= 1,
     JSON.stringify(preview));
+
+  console.log("\n[滚动条与整页宽度]");
+  // 回归（用户反馈「切换页面，有滚动条就会往左一点」）：.app-shell 是满宽布局，
+  // 系统滚动条出现/消失会让可用宽度差 15px，右侧元素随之横向跳动。
+  // scrollbar-gutter: stable 让槽位常驻，宽度不再随内容高度变化。
+  const gutter = await evaluate(`(() => {
+    const state = document.querySelector('.device-state');
+    const right = () => Math.round(state.getBoundingClientRect().right);
+    const page = document.querySelector('.page');
+    const withContent = right();
+    page.style.display = 'none';
+    const withoutContent = right();
+    page.style.display = '';
+    return { withContent, withoutContent, innerWidth: window.innerWidth };
+  })()`);
+  // 注意不能用 clientWidth 判断：槽位常驻时 Chrome 的 clientWidth 仍等于 innerWidth，
+  // 要看内容实际摆在哪 —— 右侧元素的右边缘才是布局结果。
+  check("滚动条槽位常驻（内容不溢出时整页宽度也不变）",
+    gutter?.withContent === gutter?.withoutContent
+      && (gutter?.withContent ?? 0) < (gutter?.innerWidth ?? 0),
+    JSON.stringify(gutter));
+
+  // 再直接盯用户看到的现象：切遍所有标签，右侧元素不该横跳
+  const edges = {};
+  for (const view of ["library", "mapping", "led", "device", "about"]) {
+    await evaluate(`document.querySelector('[data-view="${view}"]').click()`);
+    await sleep(400);
+    edges[view] = await evaluate(`Math.round(document.querySelector('.device-state').getBoundingClientRect().right)`);
+  }
+  await evaluate(`document.querySelector('[data-view="library"]').click()`);
+  await sleep(500);
+  check("切换所有标签时右侧元素不横向跳动",
+    new Set(Object.values(edges)).size === 1,
+    JSON.stringify(edges));
 
   console.log("\n[乐曲简介不压缩下方间距]");
   // 回归：长标题 + 两段简介会让右侧面板溢出 21px，把下方「拖到你的键盘」与

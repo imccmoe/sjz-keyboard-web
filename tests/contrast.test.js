@@ -149,18 +149,23 @@ test("键盘区底盘不得使用星空深色变量，且两套主题取值不�
 
 test("所有滚动区域的滚动条都要自定义，不能用系统默认", () => {
   const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  // 这四个是页面里真正会滚动的容器：
+  // 这些是页面里真正会滚动的容器：
+  //   html         整页（内容比视口高时）
   //   .song-list   「全部音乐」列表（用户实际看到滚动条的地方）
   //   .planet      星球视图（曲目多于坐标时）
   //   .upgrade-log 固件升级日志
   //   .detail-body 乐曲简介（长标题 + 两段简介放不下时内部滚动）
-  const scrollables = [".song-list", ".planet", ".upgrade-log", ".detail-body"];
+  const scrollables = ["html", ".song-list", ".planet", ".upgrade-log", ".detail-body"];
   for (const selector of scrollables) {
     assert.match(code, new RegExp(`\\${selector}::-webkit-scrollbar-thumb`),
       `${selector} 缺少 WebKit 滚动条滑块样式`);
     assert.match(code, new RegExp(`\\${selector}::-webkit-scrollbar-track`),
       `${selector} 缺少 WebKit 滚动条轨道样式`);
   }
+  // 整页槽位常驻：否则切换标签时内容高度一变，滚动条出现/消失会让整页宽度差 15px，
+  // 右侧元素横向跳动（用户反馈「切换页面，有滚动条就会往左一点」）。
+  assert.match(code, /scrollbar-gutter:\s*stable/,
+    "整页滚动条槽位必须常驻（scrollbar-gutter: stable），否则切换标签会横向跳动");
   assert.match(code, /scrollbar-width:\s*thin/, "缺少 scrollbar-width: thin（标准属性）");
   assert.match(code, /scrollbar-color:\s*var\(--space-ring\)\s+transparent/,
     "缺少 scrollbar-color，轨道应为透明");
