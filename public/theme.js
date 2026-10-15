@@ -66,6 +66,16 @@ export function modeLabel(mode = currentMode) {
   return `${MODE_ICONS[mode] || ""} ${MODE_LABELS[mode] || mode}`.trim();
 }
 
+/** 只取图标，用于圆形浮动按钮。 */
+export function modeIcon(mode = currentMode) {
+  return MODE_ICONS[mode] || "🌗";
+}
+
+/** 只取中文名，用于提示与 toast。 */
+export function modeName(mode = currentMode) {
+  return MODE_LABELS[mode] || mode;
+}
+
 /** 点击时在 跟随系统 → 白天 → 夜晚 之间循环。 */
 export function setThemeMode(mode) {
   currentMode = THEME_MODES.includes(mode) ? mode : "auto";

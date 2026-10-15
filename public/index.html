@@ -30,6 +30,11 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- 主题切换：固定在右下角的浮动按钮。放在静态 HTML 里而不是渲染函数中，
+         避免每次重渲染都重建它（浮动元素被重建会导致闪动与焦点丢失）。
+         图标与提示由 app.js 的 switchTheme() 维护。 -->
+    <button class="theme-toggle" data-action="toggle-theme" type="button"
+      aria-label="切换主题">🌗</button>
     <script type="module" src="./app.js"></script>
   </body>
 </html>

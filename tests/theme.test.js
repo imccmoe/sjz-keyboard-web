@@ -67,8 +67,27 @@ test("主题切换只有一条触发路径，避免重复绑定导致跳过模�
   assert.equal(directBindings.length, 0, "不应再直接给主题按钮绑定 switchTheme");
   assert.match(app, /if \(action === "toggle-theme"\) return switchTheme\(\);/,
     "handleAction 必须处理 toggle-theme");
-  const buttons = [...app.matchAll(/<button[^>]*data-action="toggle-theme"/g)];
-  assert.equal(buttons.length, 1, `主题按钮应只有一个，实际 ${buttons.length}`);
+});
+
+test("主题按钮是静态浮动按钮，不参与页面重渲染", () => {
+  // 按钮放在 index.html 而不是渲染函数里：浮动元素若每次重渲染都重建会闪动、丢焦点。
+  const html = read("public/index.html");
+  const buttons = [...html.matchAll(/<button[^>]*data-action="toggle-theme"/g)];
+  assert.equal(buttons.length, 1, `index.html 里应只有一个主题按钮，实际 ${buttons.length}`);
+  assert.match(html, /class="theme-toggle"/, "主题按钮应带 .theme-toggle 类名");
+
+  const app = read("public/app.js");
+  const renderedButtons = [...app.matchAll(/<button[^>]*data-action="toggle-theme"/g)];
+  assert.equal(renderedButtons.length, 0, "渲染函数里不应再生成主题按钮");
+  assert.match(app, /function syncThemeButton/, "缺少同步按钮图标与提示的函数");
+  assert.match(app, /syncThemeButton\(\)/, "启动时应调用 syncThemeButton 初始化按钮");
+
+  // 浮动样式应定义在样式表里
+  const styles = read("public/styles.css");
+  const toggleRule = /\.theme-toggle\s*\{([^}]*)\}/.exec(styles);
+  assert.ok(toggleRule, "styles.css 缺少 .theme-toggle 规则");
+  assert.match(toggleRule[1], /position:\s*fixed/, "主题按钮应为固定定位的浮动按钮");
+  assert.match(toggleRule[1], /right:|bottom:/, "主题按钮应贴在窗口角落");
 });
 
 test("切换主题不得重建页面（否则会清空正在录制的交互状态）", () => {

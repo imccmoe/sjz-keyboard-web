@@ -69,31 +69,32 @@ test("薄荷色按钮能承载深色文字（对比度 >= 4.5）", () => {
 });
 
 /**
- * 回归：用户报告「鼠标放到连接按钮上就变成白色」，连续两次反馈后决定**彻底去掉按钮悬停变色**。
- * 根因是 `.button:hover` 与 `.button.primary` 优先级相同（都是 0,2,0），胜负只由书写顺序决定。
- * 现在通过两条约束避免复发：
- *   1. 不存在 `.button` / `.button.primary` 的 :hover 背景规则
- *   2. 主按钮的 color 用 inherit，永远继承基础规则（--button-ink），
- *      即使将来有人误加悬停规则，文字也不会变成白色
+ * 回归：`.button:hover` 与 `.button.primary` 优先级相同（都是 0,2,0），
+ * 若通用悬停规则不排除主按钮，胜负只由书写顺序决定 ——
+ * 曾导致悬停时紫色底被换成浅色、白字消失（对比度 1.04）。
+ * 现在的约定：通用悬停规则用 :not(.primary) 排除主按钮，
+ * 主按钮自己的悬停态显式重声明底色与文字色。
  */
-test("主按钮不参与悬停变色，文字色使用前景变量", () => {
-  // 先剥掉注释，否则注释里提到的 `.button:hover` 会被当成真实规则
+test("悬停规则不互相覆盖：通用规则排除主按钮，主按钮自行声明", () => {
   const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  const buttonHoverRules = [
-    ...code.matchAll(/([^{}]*\.button[^{}]*:hover[^{}]*)\{([^}]*)\}/g)
-  ].map((match) => ({ selector: match[1].trim(), body: match[2] }));
 
-  assert.deepEqual(buttonHoverRules, [],
-    `不应再为 .button 定义悬停规则，实际存在：${buttonHoverRules.map((r) => r.selector).join(" / ")}`);
+  const generic = /\.button:hover:not\(:disabled\)([^{]*)\{([^}]*)\}/.exec(code);
+  assert.ok(generic, "找不到通用按钮悬停规则");
+  assert.match(generic[1], /:not\(\.primary\)/,
+    "通用悬停规则必须排除主按钮，否则会覆盖主按钮的紫色底");
+  assert.match(generic[2], /background:/, "通用悬停规则应保留背景反馈");
+
+  const primaryHover = /\.button\.primary:hover[^{]*\{([^}]*)\}/.exec(code);
+  assert.ok(primaryHover, "主按钮缺少自己的悬停规则");
+  assert.match(primaryHover[1], /background:\s*var\(--violet\)/,
+    "主按钮悬停态必须重新声明紫色底");
+  assert.match(primaryHover[1], /color:\s*var\(--on-accent\)/,
+    "主按钮悬停态必须重新声明白色文字");
 
   const primary = /\.button\.primary\s*\{([^}]*)\}/.exec(code);
   assert.ok(primary, "找不到 .button.primary");
-  assert.match(primary[1], /background:\s*var\(--violet\)/, "主按钮底色应保持紫色");
-  // 不能用 inherit：按钮 color 默认继承父元素的 --button-ink，实测只有 3.46 的对比度
   assert.ok(!/color:\s*inherit/.test(primary[1]),
-    "主按钮的文字色不能用 inherit，会继承到深色的 --button-ink");
-  assert.match(primary[1], /color:\s*var\(--on-accent\)/,
-    "主按钮文字应使用 --on-accent（两套主题都是白色）");
+    "主按钮文字色不能用 inherit，会继承到深色的 --button-ink");
 });
 
 test("开发服务器为静态资源提供 ETag，避免浏览器用旧缓存", () => {

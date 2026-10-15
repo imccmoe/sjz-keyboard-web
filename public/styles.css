@@ -237,23 +237,42 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   color: var(--button-ink);
   font-weight: 700;
 }
-/* 按钮不做悬停变色。原因：`.button:hover` 与 `.button.primary` 优先级相同（都是 0,2,0），
-   胜负只由书写顺序决定；曾经因此让悬停时的紫色底被换成浅色、白字消失（对比度 1.04）。
-   这里直接去掉 `.button` 的悬停背景变化。
-   注意：主按钮的文字色必须用 --on-accent 这类前景变量，不能用 inherit ——
-   按钮的 color 默认继承父元素（--button-ink，可能很深），实测会得到 3.46 的对比度。 */
+/* 通用按钮的悬停反馈：用 :not(.primary) 明确排除主按钮。
+   若不加这个排除，`.button:hover` 与 `.button.primary` 优先级相同（都是 0,2,0），
+   胜负只由书写顺序决定 —— 曾经因此把紫色底换成浅色、白字消失（对比度 1.04）。 */
+.button:hover:not(:disabled):not(.primary) { border-color: var(--border-hover); background: var(--surface-raised); }
 .button.primary { border-color: var(--violet); background: var(--violet); color: var(--on-accent); }
-/* 主题切换按钮：与 .button 同尺寸，但不抢主操作视觉 */
+/* 主按钮的悬停反馈：显式重复声明底色与文字色，不依赖继承，也不会被通用规则影响 */
+.button.primary:hover:not(:disabled) {
+  border-color: var(--violet);
+  background: var(--violet);
+  color: var(--on-accent);
+  filter: brightness(1.08);
+}
+.button.primary:active:not(:disabled) { filter: brightness(0.94); }
+/* 主题切换：右下角浮动小按钮，不占顶部栏的主操作位置 */
 .theme-toggle {
-  min-height: 40px;
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 90;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
   border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  padding: 0 13px;
+  border-radius: 50%;
   background: var(--surface);
   color: var(--button-ink);
-  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
 }
 .theme-toggle:hover { border-color: var(--border-hover); background: var(--surface-raised); }
+@media (max-width: 660px) {
+  .theme-toggle { right: 12px; bottom: 12px; width: 40px; height: 40px; font-size: 16px; }
+}
 .device-state {
   height: 54px;
   min-width: 70px;
@@ -346,15 +365,23 @@ a.main-tab {
 .search-strip select { min-width: 190px; padding-right: 28px; }
 .search-strip input:focus { box-shadow: inset 0 0 0 2px var(--input-focus); }
 .search-strip span { color: var(--muted); font-size: 13px; white-space: nowrap; }
-.library-stage { height: 340px; display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 10px; }
+/* 网格行必须给出确定高度：若用 grid-auto-rows: auto，行会被内容撑开，
+   则 `.planet` 的 height:100% 无法解析成确定值，padding 会把容器一路撑高，
+   反而盖住下方的键位卡片。 */
+.library-stage { height: 340px; display: grid; grid-template-columns: minmax(0, 1fr) 280px; grid-template-rows: 340px; gap: 10px; }
 .planet, .song-list {
   min-width: 0;
+  height: 100%;
   overflow: hidden;
   border-radius: 20px;
   background: var(--space-bg);
   border: 1px solid var(--space-line);
 }
 .planet { position: relative; }
+/* 星球容器高度固定为舞台高度；坐标由 JS 按曲目数用百分比铺满，
+   所以曲目变多只是排得更密，不会撑高容器或需要滚动。 */
+.planet.scrollable { overflow-y: auto; overflow-x: hidden; }
+.planet.scrollable::-webkit-scrollbar-thumb:hover { background: var(--focus-ring); }
 .planet::before, .planet::after {
   content: "";
   position: absolute;

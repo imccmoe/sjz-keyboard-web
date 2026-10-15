@@ -2,7 +2,7 @@ import { compileSong, formatDuration, startPreview, stopPreview } from "./music-
 import { BOOT_PID, inspectUpgradeDevices, MusicHidDevice, requestBootloader, uploadFirmware, waitForAppReenumeration, webHidSupported } from "./device.js";
 import { decryptFirmware } from "./firmware.js";
 import { KEY_USAGES, spinCounts } from "./device-config.js";
-import { cycleThemeMode, getThemeMode, modeLabel, setThemeMode, watchSystemTheme } from "./theme.js";
+import { cycleThemeMode, getThemeMode, modeIcon, modeName, setThemeMode, watchSystemTheme } from "./theme.js";
 
 const APP_VERSION = "1.15";
 const TEST_STAGE_LABELS = {
@@ -10,13 +10,43 @@ const TEST_STAGE_LABELS = {
   2: "阶段 2 · Qt 试听通过",
   3: "阶段 3 · 游戏实测通过",
 };
-const PLANET_POSITIONS = [
-  [54, 70, 1.18], [30, 35, 0.72], [62, 22, 0.66], [76, 42, 0.72], [20, 58, 0.55],
-  [45, 44, 0.82], [70, 70, 0.9], [84, 61, 0.55], [36, 70, 0.62], [16, 31, 0.56],
-  [87, 28, 0.68], [43, 18, 0.58], [25, 78, 0.7], [59, 51, 0.6], [72, 18, 0.58],
-  [12, 70, 0.54], [92, 76, 0.55], [33, 18, 0.52], [51, 83, 0.56], [81, 82, 0.58],
-];
-const PLANET_COLORS = ["#86ddd4", "#aeb9e7", "#f2aab3", "#8fd4cb", "#9fd9f1", "#d8bb75"];
+/**
+ * 星球坐标：按曲目数动态铺满容器，行距用百分比表示，因此容器高度始终是固定的 340px。
+ *
+ * 之前固定 20 组坐标 + `songs.slice(0, 20)`，第 21 首之后直接不渲染。
+ * 现在改为：行数由曲目数决定，y 仍然用百分比，所以歌变多只是排得更密，
+ * 不会撑高容器去压住下方的键位卡片，也不需要滚动。
+ */
+const PLANET_ROWS_MIN = 6;
+const PLANET_ROWS_MAX = 11;
+const PLANET_TOP_Y = 8;
+const PLANET_BOTTOM_Y = 92;
+/** 每行最多放几颗星球（与横向坐标数量对应）。 */
+const PLANET_COLUMNS = 4;
+const PLANET_COLUMN_X = [16, 39, 62, 85];
+const PLANET_COLUMN_SCALE = [0.62, 0.72, 0.66, 0.6];
+
+/** 按曲目数决定行数：太少会挤，太多会稀疏，这里夹在 6~11 行之间。 */
+function planetRowCount(count) {
+  const rows = Math.ceil(count / PLANET_COLUMNS);
+  return Math.min(PLANET_ROWS_MAX, Math.max(PLANET_ROWS_MIN, rows));
+}
+
+/** 第 index 首的星球坐标与缩放。行内做一点错落，避免看起来像网格。 */
+function planetPosition(index, total = 20) {
+  const rows = planetRowCount(total);
+  const row = Math.floor(index / PLANET_COLUMNS) % rows;
+  const column = index % PLANET_COLUMNS;
+  const step = rows > 1 ? (PLANET_BOTTOM_Y - PLANET_TOP_Y) / (rows - 1) : 0;
+  // 相邻行横向错开，让分布看起来是散落的星空而不是表格
+  const jitter = (row % 2 === 0 ? 0 : 6) + ((index % 3) - 1) * 3;
+  const x = Math.max(6, Math.min(94, PLANET_COLUMN_X[column] + jitter));
+  const y = rows > 1 ? PLANET_TOP_Y + row * step : (PLANET_TOP_Y + PLANET_BOTTOM_Y) / 2;
+  // 行数越多星球越小，避免文字互相重叠
+  const density = rows / PLANET_ROWS_MIN;
+  const scale = Math.round((PLANET_COLUMN_SCALE[column] / Math.max(1, density * 0.82)) * 100) / 100;
+  return [Math.round(x * 10) / 10, Math.round(y * 10) / 10, Math.max(0.42, scale)];
+}const PLANET_COLORS = ["#86ddd4", "#aeb9e7", "#f2aab3", "#8fd4cb", "#9fd9f1", "#d8bb75"];
 const KEY_LABELS = { Space: "空格", Enter: "回车", Backspace: "退格", Delete: "删除",
   Up: "上方向", Down: "下方向", Left: "左方向", Right: "右方向" };
 const KEY_ORDER = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", ..."0123456789",
@@ -216,9 +246,6 @@ function render() {
           </select>
           <button class="button" data-action="scan-device">刷新已授权设备</button>
           <button class="button primary" data-action="connect-device">连接</button>
-          <button class="theme-toggle" data-action="toggle-theme"
-            aria-label="切换主题，当前${modeLabel(getThemeMode())}"
-            title="切换主题：跟随系统 / 白天 / 夜晚（当前：${modeLabel(getThemeMode())}）">${modeLabel(getThemeMode())}</button>
           <span class="device-state ${state.device.connected ? "online" : ""}">${deviceStatus}</span>
         </div>
       </header>
@@ -247,13 +274,12 @@ function pageHeading(eyebrow, title, subtitle, aside = "") {
 function renderLibrary() {
   const songs = filteredSongs();
   const song = selectedSong();
-  const shown = Math.min(songs.length, 20);
   const switches = `<div class="view-switch" role="group"><button class="${state.libraryMode === "planet" ? "active" : ""}" data-library-mode="planet">星球视图</button><button class="${state.libraryMode === "list" ? "active" : ""}" data-library-mode="list">全部音乐&nbsp; ${songs.length}</button><button class="button" data-action="reload-library">重新加载</button></div>`;
   return `
     ${pageHeading("发现音乐", "音乐星球", "像浏览星空一样选歌。单击查看，双击试听，也可以直接拖到 K1～K3。", switches)}
-    <section class="search-strip"><strong>查找星球</strong><input id="song-search" value="${escapeHtml(state.search)}" placeholder="搜索歌名、作者、难度或测试阶段" /><select id="stage-filter" aria-label="测试阶段筛选"><option value="0">全部阶段</option>${Object.entries(TEST_STAGE_LABELS).map(([stage, label]) => `<option value="${stage}" ${state.stageFilter === Number(stage) ? "selected" : ""}>${label}</option>`).join("")}</select><span>${state.libraryMode === "planet" ? `星球展示 ${shown} / ${songs.length} 首` : `全部 ${songs.length} 首音乐`}</span></section>
+    <section class="search-strip"><strong>查找星球</strong><input id="song-search" value="${escapeHtml(state.search)}" placeholder="搜索歌名、作者、难度或测试阶段" /><select id="stage-filter" aria-label="测试阶段筛选"><option value="0">全部阶段</option>${Object.entries(TEST_STAGE_LABELS).map(([stage, label]) => `<option value="${stage}" ${state.stageFilter === Number(stage) ? "selected" : ""}>${label}</option>`).join("")}</select><span>${state.libraryMode === "planet" ? `星球展示 ${songs.length} 首` : `全部 ${songs.length} 首音乐`}</span></section>
     <div class="library-stage">
-      ${state.libraryMode === "planet" ? renderPlanet(songs.slice(0, 20)) : renderSongList(songs)}
+      ${state.libraryMode === "planet" ? renderPlanet(songs) : renderSongList(songs)}
       ${renderSongDetail(song)}
     </div>
     <div class="slot-heading"><strong>拖到你的键盘</strong><span>把歌曲拖到 K1～K3，或先选歌再点击键位卡片；放入歌曲后保存按钮可用。</span></div>
@@ -262,8 +288,10 @@ function renderLibrary() {
 
 function renderPlanet(songs) {
   if (!songs.length) return `<div class="planet empty-state">没有找到匹配的音乐</div>`;
+  // 容器高度固定（CSS 里的 340px），坐标用百分比按曲目数自动铺满，
+  // 因此歌变多只是排得更密，不会撑高容器压住下方的键位卡片。
   return `<div class="planet" aria-label="音乐星球">${songs.map((song, index) => {
-    const [x, y, scale] = PLANET_POSITIONS[index];
+    const [x, y, scale] = planetPosition(index, songs.length);
     const active = song.id === selectedSong()?.id;
     return `<button class="planet-song ${active ? "active" : ""}" draggable="true" data-song-id="${escapeHtml(song.id)}" style="--x:${x}%;--y:${y}%;--scale:${scale};--color:${PLANET_COLORS[index % PLANET_COLORS.length]};--delay:${-(index % 7)}s"><i></i><span>${escapeHtml(song.title)}</span></button>`;
   }).join("")}</div>`;
@@ -493,16 +521,21 @@ function bindEvents() {
 /**
  * 切换主题。这里**不能**调用 render()：那会重建页面节点，
  * 把「按键捕获」输入框里正在录制的按键状态清空。
- * 主题只需要改 <html data-theme>（由 theme.js 负责）加上按钮文案。
+ * 主题只需要改 <html data-theme>（由 theme.js 负责）加上浮动按钮的图标与提示。
  */
 function switchTheme() {
   const mode = cycleThemeMode();
+  syncThemeButton(mode);
+  showToast(`主题：${modeName(mode)}`);
+}
+
+/** 把当前模式同步到右下角浮动按钮（图标 + 无障碍说明）。 */
+function syncThemeButton(mode = getThemeMode()) {
   document.querySelectorAll('[data-action="toggle-theme"]').forEach((button) => {
-    button.textContent = modeLabel(mode);
-    button.title = `切换主题：跟随系统 / 白天 / 夜晚（当前：${modeLabel(mode)}）`;
-    button.setAttribute("aria-label", `切换主题，当前${modeLabel(mode)}`);
+    button.textContent = modeIcon(mode);
+    button.title = `主题：${modeName(mode)}（点击切换 跟随系统 → 白天 → 夜晚）`;
+    button.setAttribute("aria-label", `切换主题，当前${modeName(mode)}`);
   });
-  showToast(`主题：${modeLabel(mode)}`);
 }
 
 function captureKey(event) {
@@ -1010,13 +1043,10 @@ async function loadCatalog(reload = false) {
 }
 
 // 主题：引导脚本已设好 data-theme，这里恢复存储的模式并在 auto 下跟随系统。
-// 只更新按钮文案，不调用 render()，以免打断「按键捕获」等交互状态。
+// 只同步浮动按钮，不调用 render()，以免打断「按键捕获」等交互状态。
 setThemeMode(getThemeMode());
-watchSystemTheme(() => {
-  document.querySelectorAll('[data-action="toggle-theme"]').forEach((button) => {
-    button.textContent = modeLabel(getThemeMode());
-  });
-});
+syncThemeButton();
+watchSystemTheme(() => syncThemeButton());
 
 render();
 loadCatalog();
