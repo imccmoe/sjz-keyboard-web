@@ -548,30 +548,14 @@ a.main-tab {
 .detail-body::-webkit-scrollbar-corner {
   background: transparent;
 }
-/* 整页滚动条（根滚动容器）同样自定义，并且槽位常驻。
-   页面本身是满宽布局（.app-shell 没有居中 max-width），所以系统滚动条一出现一消失，
+/* 整页滚动条只让槽位常驻，样式保持系统默认（不套主题）。
+   页面是满宽布局（.app-shell 没有居中 max-width），系统滚动条一出现一消失，
    可用宽度就变 15px，右侧固定/右对齐的元素会横向跳动 ——
    实测「灯光设置」内容短、不出滚动条（clientWidth 1408），切到其它标签变 1393，
    整页右侧元素横跳 15px。scrollbar-gutter: stable 让槽位始终占位，
-   宽度不再随内容高度变化。 */
+   宽度不再随内容高度变化；槽位空着时显示的是页面背景，不会多出一条轨道。 */
 html {
   scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: var(--space-ring) transparent;
-}
-html::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-html::-webkit-scrollbar-track {
-  background: transparent;
-}
-html::-webkit-scrollbar-thumb {
-  background: var(--space-ring);
-  border-radius: 999px;
-}
-html::-webkit-scrollbar-thumb:hover {
-  background: var(--focus-ring);
 }
 .planet::before, .planet::after {
   content: "";

@@ -149,13 +149,12 @@ test("键盘区底盘不得使用星空深色变量，且两套主题取值不�
 
 test("所有滚动区域的滚动条都要自定义，不能用系统默认", () => {
   const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  // 这些是页面里真正会滚动的容器：
-  //   html         整页（内容比视口高时）
+  // 这些是页面里真正会滚动的面板容器（整页滚动条刻意保持系统默认样式，不在检查范围内）：
   //   .song-list   「全部音乐」列表（用户实际看到滚动条的地方）
   //   .planet      星球视图（曲目多于坐标时）
   //   .upgrade-log 固件升级日志
   //   .detail-body 乐曲简介（长标题 + 两段简介放不下时内部滚动）
-  const scrollables = ["html", ".song-list", ".planet", ".upgrade-log", ".detail-body"];
+  const scrollables = [".song-list", ".planet", ".upgrade-log", ".detail-body"];
   for (const selector of scrollables) {
     assert.match(code, new RegExp(`\\${selector}::-webkit-scrollbar-thumb`),
       `${selector} 缺少 WebKit 滚动条滑块样式`);

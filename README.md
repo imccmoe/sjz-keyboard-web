@@ -268,7 +268,7 @@ npm run check:inline  # HTML 内联模块语法
 | `tests/protocol.test.js` | 曲包协议、旋转灵敏度换算、键位/灯光往返、加密固件校验 |
 | `tests/device-wire.test.js` | WebHID 报文往返、OTA 分区基址、旋转键 v1→v2 过渡 |
 | `tests/theme.test.js` | 亮暗变量集合一致、无自引用变量、无硬编码颜色、主题只有一条触发路径、前景色不误用背景色 |
-| `tests/contrast.test.js` | 主色承载白字、薄荷底承载深字、正文与背景、紫色文字的 WCAG 对比度、悬停规则不互相覆盖、滚动条样式与槽位常驻 |
+| `tests/contrast.test.js` | 主色承载白字、薄荷底承载深字、正文与背景、紫色文字的 WCAG 对比度、悬停规则不互相覆盖、内层面板滚动条样式、整页滚动条槽位常驻 |
 | `tests/songs-api.test.js` | 曲库 API 契约：列表筛选与 LIKE 转义、单曲三种定位（含路径参数百分号编码）、鉴权、编号分配与不复用、导入 replace/merge、迁移与种子 SQL 可执行 |
 | `tests/preview.test.js` | 试听播放：渲染期间被停止或被新试听取代时不得出声、正常 start → stop 与 onDone 复位（用替身 AudioContext 在纯 Node 下运行） |
 
