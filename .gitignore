@@ -1,6 +1,7 @@
 node_modules/
 .npm-cache/
-.dev.vars
+# 本地密钥：.dev.vars* 覆盖 .dev.vars.preview / .dev.vars.production 这类按环境拆分的写法
+.dev.vars*
 .env
 .env.*
 

@@ -59,10 +59,11 @@ npx wrangler d1 migrations apply sjz-keyboard-web --local
 npx wrangler d1 execute sjz-keyboard-web --local --file seeds/songs.sql
 ```
 
-`.dev.vars` 里放 `ADMIN_TOKEN=...`（已被 gitignore），本地管理接口才可用：
+`.dev.vars` 里放 `ADMIN_TOKEN`（该文件已被 gitignore），本地管理接口才可用。
+值随便填，**不要用线上令牌**：
 
 ```
-ADMIN_TOKEN=local-dev-token
+ADMIN_TOKEN=dev-only-change-me
 ```
 
 > 曲库只存放在 D1，页面始终通过 `/api/songs` 读取，**没有本地 JSON 快照**。
