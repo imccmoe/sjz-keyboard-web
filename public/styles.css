@@ -799,6 +799,17 @@ html {
 .firmware-card > p { font-size: 13px; }
 .firmware-file { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 14px; color: var(--muted); font-size: 13px; }
 .firmware-file span { overflow-wrap: anywhere; }
+/* 「选择更新文件」是 <label class="button">（里面藏着 file input），
+   作为 flex 项它会被块级化：文字贴顶；窄屏下 .firmware-file 改成纵向 stretch，
+   它又被拉满整行、文字仍靠左 —— 看着就不像按钮也不居中。
+   这里补上按钮该有的居中行为（横向居中 + 垂直居中），并给出手型光标。 */
+.firmware-file .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+}
 .firmware-file input { display: none; }
 .progress { height: 22px; border-radius: 4px; background: var(--progress-track); overflow: hidden; margin: 9px 0 6px; }
 .progress span { display: block; height: 100%; background: var(--violet); transition: width 180ms; }
