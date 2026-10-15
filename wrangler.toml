@@ -6,7 +6,7 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "sjz-keyboard-web"
-database_id = "replace-with-your-d1-id"
+database_id = "0c88cada-bb19-4849-905f-bd19e16939e9"
 migrations_dir = "migrations"
 
 # 管理端令牌：npx wrangler pages secret put ADMIN_TOKEN
